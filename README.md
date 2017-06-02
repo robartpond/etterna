@@ -1,10 +1,11 @@
 Etterna
 =========
 
-Etterna is a rhythm game based on the [Stepmania](https://www.stepmania.com/) engine that is focused on better accomodating the four-key keyboard metagame.  Some new features include automatic difficulty calculation, a new scoring system, and engine optimizations.  Etterna is generally compatible with content for stepmania 5.0.  However, some Stepmania 5.0 themes may require modification in order to function properly.
+Etterna is an advanced cross-platform rhythm game focused on keyboard play.
 
-[![Build Status](https://travis-ci.org/etternagame/etterna.svg?branch=master)](https://travis-ci.org/etternagame/etterna)
-[![Build status](https://ci.appveyor.com/api/projects/status/35aogvmifkm43ygd/branch/master?svg=true)](https://ci.appveyor.com/project/xwidghet/stepmania/branch/master)
+[![Travis CI Build Status](https://travis-ci.org/etternagame/etterna.svg?branch=master)](https://travis-ci.org/etternagame/etterna)
+[![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/lgdsvx101i45d71k?svg=true)](https://ci.appveyor.com/project/martensm/etterna)
+[![Coverity Scan Build Status](https://img.shields.io/coverity/scan/12978.svg)](https://scan.coverity.com/projects/etternagame-etterna)
 
 ## Installation
 ### From Packages
