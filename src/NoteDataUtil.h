@@ -25,7 +25,7 @@ namespace NoteDataUtil
 	NoteType GetSmallestNoteTypeForMeasure( const NoteData &nd, int iMeasureIndex );
 	NoteType GetSmallestNoteTypeInRange( const NoteData &nd, int iStartIndex, int iEndIndex );
 	void LoadFromSMNoteDataString( NoteData &out, const RString &sSMNoteData, bool bComposite );
-	void LoadFromETTNoteDataString(NoteData& out, const RString &sSMNoteData, int start, int len);
+	void LoadFromETTNoteDataString(NoteData& out, const RString &sSMNoteData);
 	void GetSMNoteDataString( const NoteData &in, RString &notes_out );
 	void GetETTNoteDataString(const NoteData &in, RString &notes_out);
 	void SplitCompositeNoteData( const NoteData &in, vector<NoteData> &out );
@@ -165,7 +165,6 @@ namespace NoteDataUtil
 	void TransformNoteData(NoteData &nd, TimingData const& timing_data,
 		const PlayerOptions &po, StepsType st,
 			       int iStartIndex = 0, int iEndIndex = MAX_NOTE_ROW );
-	void AddTapAttacks( NoteData &nd, Song* pSong );
 
 	void Scale( NoteData &nd, float fScale );
 	void ScaleRegion( NoteData &nd, float fScale, int iStartIndex = 0, int iEndIndex = MAX_NOTE_ROW );

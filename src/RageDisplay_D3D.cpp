@@ -562,6 +562,9 @@ RString RageDisplay_D3D::TryVideoMode( const VideoModeParams &_p, bool &bNewDevi
 
 	ResolutionChanged();
 
+	// Present once the window is created so we don't display a white frame while initializing
+	g_pd3dDevice->Present(0, 0, 0, 0);
+
 	return RString(); // mode change successful
 }
 
@@ -860,9 +863,9 @@ void RageDisplay_D3D::DrawQuadsInternal( const RageSpriteVertex v[], int iNumVer
 	// make a temporary index buffer
 	static vector<uint16_t> vIndices;
 	unsigned uOldSize = vIndices.size();
-	unsigned uNewSize = max(uOldSize,(unsigned)iNumIndices);
+	unsigned uNewSize = max(uOldSize, static_cast<unsigned>(iNumIndices));
 	vIndices.resize( uNewSize );
-	for( uint16_t i=(uint16_t)uOldSize/6; i<(uint16_t)iNumQuads; i++ )
+	for( uint16_t i=static_cast<uint16_t>(uOldSize/6); i<static_cast<uint16_t>(iNumQuads); i++ )
 	{
 		vIndices[i*6+0] = i*4+0;
 		vIndices[i*6+1] = i*4+1;

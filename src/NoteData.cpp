@@ -30,13 +30,13 @@ void NoteData::SetNumTracks( int iNewNumTracks )
 
 bool NoteData::IsComposite() const
 {
+	return false;
 	for( int track = 0; track < GetNumTracks(); ++track )
 	{
 		FOREACHM_CONST( int, TapNote, m_TapNotes[track], tn )
 			if( tn->second.pn != PLAYER_INVALID )
 				return true;
 	}
-	return false;
 }
 
 // Clear (rowBegin,rowEnd).
@@ -458,7 +458,6 @@ bool NoteData::IsHoldNoteAtRow( int iTrack, int iRow, int *pHeadRow ) const
 
 		case TapNoteType_Tap:
 		case TapNoteType_Mine:
-		case TapNoteType_Attack:
 		case TapNoteType_Lift:
 		case TapNoteType_Fake:
 			return false;

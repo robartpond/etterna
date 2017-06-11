@@ -22,7 +22,7 @@
 #include "Character.h"
 #include "CharacterManager.h"
 
-unique_ptr<ProfileManager>	PROFILEMAN;	// global and accessible from anywhere in our program
+ProfileManager*	PROFILEMAN = NULL;	// global and accessible from anywhere in our program
 
 #define ID_DIGITS 8
 #define ID_DIGITS_STR "8"
@@ -37,7 +37,6 @@ static void DefaultLocalProfileIDInit( size_t /*PlayerNumber*/ i, RString &sName
 		defaultValueOut = "";
 }
 
-Preference<bool> ProfileManager::m_bProfileStepEdits( "ProfileStepEdits", true );
 Preference1D<RString> ProfileManager::m_sDefaultLocalProfileID( DefaultLocalProfileIDInit, NUM_PLAYERS );
 
 const RString USER_PROFILES_DIR	=	"/Save/LocalProfiles/";
@@ -360,7 +359,6 @@ void ProfileManager::RefreshLocalProfilesFromDisk(LoadingWindow* ld)
 	add_category_to_global_list(categorized_profiles[ProfileType_Test]);
 	FOREACH(DirAndProfile, g_vLocalProfile, curr)
 	{
-		currentlyloadingprofile = curr->sDir.substr(1);
 		curr->profile.LoadAllFromDir(curr->sDir, PREFSMAN->m_bSignProfileData, ld);
 	}
  }

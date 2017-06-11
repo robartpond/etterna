@@ -23,9 +23,6 @@
 #include "FilterManager.h"
 #include "RageString.h"
 
-static Preference<bool> g_bMoveRandomToEnd( "MoveRandomToEnd", false );
-static Preference<bool> g_bPrecacheAllSorts( "PreCacheAllWheelSorts", false);
-
 #define NUM_WHEEL_ITEMS		(static_cast<int>(ceil(NUM_WHEEL_ITEMS_TO_DRAW+2)))
 #define WHEEL_TEXT(s)		THEME->GetString( "MusicWheel", ssprintf("%sText",s.c_str()) );
 #define CUSTOM_ITEM_WHEEL_TEXT(s)		THEME->GetString( "MusicWheel", ssprintf("CustomItem%sText",s.c_str()) );
@@ -111,14 +108,6 @@ void MusicWheel::BeginScreen()
 			m_WheelItemDatasStatus[so]=NEEDREFILTER;
 			
 		}
-
-		if(g_bPrecacheAllSorts) {
-			readyWheelItemsData(so, false, "");
-			times += ssprintf( "%i:%.3f ", so, timer.GetDeltaTime() );
-		}
-	}
-	if(g_bPrecacheAllSorts) {
-		LOG->Trace( "MusicWheel sorting took: %s", times.c_str() );
 	}
 
 	// Set m_LastModeMenuItem to the first item that matches the current mode.  (Do this
@@ -137,13 +126,6 @@ void MusicWheel::BeginScreen()
 	}
 
 	WheelBase::BeginScreen();
-
-	if( GAMESTATE->IsAnExtraStageAndSelectionLocked() )
-	{
-		m_WheelState = STATE_LOCKED;
-		SCREENMAN->PlayStartSound();
-		m_fLockedWheelVelocity = 0;
-	}
 
 	GAMESTATE->m_SortOrder.Set( GAMESTATE->m_PreferredSortOrder );
 
@@ -187,34 +169,6 @@ void MusicWheel::BeginScreen()
 
 	// rebuild the WheelItems that appear on screen
 	RebuildWheelItems();
-
-	/* Invalidate current Song if it can't be played
-	 * because there are not enough stages remaining. */
-	if(GAMESTATE->m_pCurSong != NULL &&
-		GameState::GetNumStagesMultiplierForSong(GAMESTATE->m_pCurSong) >
-		GAMESTATE->GetSmallestNumStagesLeftForAnyHumanPlayer())
-	{
-		GAMESTATE->m_pCurSong.Set(NULL);
-	}
-
-	/* Invalidate current Steps if it can't be played
-	 * because there are not enough stages remaining. */
-	FOREACH_ENUM(PlayerNumber, p)
-	{
-		if(GAMESTATE->m_pCurSteps[p] != NULL)
-		{
-			vector<Steps*> vpPossibleSteps;
-			if(GAMESTATE->m_pCurSong != NULL)
-			{
-				SongUtil::GetPlayableSteps(GAMESTATE->m_pCurSong, vpPossibleSteps);
-			}
-			bool bStepsIsPossible = find(vpPossibleSteps.begin(), vpPossibleSteps.end(), GAMESTATE->m_pCurSteps[p]) == vpPossibleSteps.end();
-			if(!bStepsIsPossible)
-			{
-				GAMESTATE->m_pCurSteps[p].Set(NULL);
-			}
-		}
-	}
 }
 
 MusicWheel::~MusicWheel()
@@ -401,27 +355,11 @@ void MusicWheel::GetSongList( vector<Song*> &arraySongs, SortOrder so )
 		break;
 	}
 
-	// filter songs that we don't have enough stages to play
-	{
-		vector<Song*> vTempSongs;
-		SongCriteria sc;
-		sc.m_iMaxStagesForSong = GAMESTATE->GetSmallestNumStagesLeftForAnyHumanPlayer();
-		SongUtil::FilterSongs( sc, apAllSongs, vTempSongs );
-		apAllSongs = vTempSongs;
-	}
-
 	// copy only songs that have at least one Steps for the current GameMode
 	for( unsigned i=0; i<apAllSongs.size(); i++ )
 	{
 		Song* pSong = apAllSongs[i];
 
-		if( PREFSMAN->m_bOnlyPreferredDifficulties )
-		{
-			// if the song has steps that fit the preferred difficulty of the default player
-			if( pSong->HasStepsTypeAndDifficulty( GAMESTATE->GetCurrentStyle(PLAYER_INVALID)->m_StepsType,GAMESTATE->m_PreferredDifficulty[GAMESTATE->GetFirstHumanPlayer()] ) )
-				arraySongs.emplace_back( pSong );
-		}
-		else
 		{
 			// Online mode doesn't support auto set style.  A song that only has
 			// dance-double steps will show up when dance-single was selected, with
@@ -453,18 +391,6 @@ void MusicWheel::GetSongList( vector<Song*> &arraySongs, SortOrder so )
 					arraySongs.emplace_back( pSong );
 			}
 		}
-	}
-
-	/* Hack: Add extra stage item if it was eliminated for any reason
-	 * (eg. it's a long song). */
-	if( GAMESTATE->IsAnExtraStage() )
-	{
-		Song* pSong;
-		Steps* pSteps;
-		SONGMAN->GetExtraStageInfo( GAMESTATE->IsExtraStage2(), GAMESTATE->GetCurrentStyle(PLAYER_INVALID), pSong, pSteps );
-
-		if( find( arraySongs.begin(), arraySongs.end(), pSong ) == arraySongs.end() )
-			arraySongs.emplace_back( pSong );
 	}
 }
 
@@ -805,23 +731,6 @@ void MusicWheel::BuildWheelItemDatas( vector<MusicWheelItemData *> &arrayWheelIt
 					if (hurp.count(s))
 						arrayWheelItemDatas.emplace_back(new MusicWheelItemData(WheelItemDataType_Song, s, gname, SONGMAN->GetSongColor(s), 0));
 			}
-
-			if( GAMESTATE->IsAnExtraStageAndSelectionLocked() )
-			{
-				Song* pSong;
-				Steps* pSteps;
-				SONGMAN->GetExtraStageInfo( GAMESTATE->IsExtraStage2(), GAMESTATE->GetCurrentStyle(PLAYER_INVALID), pSong, pSteps );
-				
-				for( unsigned i=0; i<arrayWheelItemDatas.size(); i++ )
-				{
-					if( arrayWheelItemDatas[i]->m_pSong == pSong )
-					{
-						// Change the song color.
-						arrayWheelItemDatas[i]->m_color = SONG_REAL_EXTRA_COLOR;
-						break;
-					}
-				}
-			}
 			break;
 		}
 		default:
@@ -886,15 +795,6 @@ void MusicWheel::FilterWheelItemDatas(vector<MusicWheelItemData *> &aUnFilteredD
 	vector<bool> aiRemove;
 	aiRemove.insert( aiRemove.begin(), unfilteredSize, false );
 
-	const int iMaxStagesForSong = GAMESTATE->GetSmallestNumStagesLeftForAnyHumanPlayer();
-
-	Song *pExtraStageSong = NULL;
-	if( GAMESTATE->IsAnExtraStage() )
-	{
-		Steps *pSteps;
-		SONGMAN->GetExtraStageInfo( GAMESTATE->IsExtraStage2(), GAMESTATE->GetCurrentStyle(PLAYER_INVALID), pExtraStageSong, pSteps );
-	}
-
 	/* Mark any songs that aren't playable in aiRemove. */
 
 	for( unsigned i=0; i< unfilteredSize; i++ )
@@ -913,18 +813,6 @@ void MusicWheel::FilterWheelItemDatas(vector<MusicWheelItemData *> &aUnFilteredD
 		if( WID.m_Type == WheelItemDataType_Song )
 		{
 			Song* pSong = WID.m_pSong;
-
-			/* Never remove the extra stage song. */
-			if( pExtraStageSong && WID.m_pSong == pExtraStageSong )
-				continue;
-
-			/* Check that we have enough stages to play this song. */
-			if( GAMESTATE->GetNumStagesMultiplierForSong(WID.m_pSong) > iMaxStagesForSong )
-			{
-				aiRemove[i] = true;
-				continue;
-			}
-
 			/* If the song has no steps for the current style, remove it. */
 			if( !CommonMetrics::AUTO_SET_STYLE && !pSong->HasStepsType(GAMESTATE->GetCurrentStyle(PLAYER_INVALID)->m_StepsType) )
 			{

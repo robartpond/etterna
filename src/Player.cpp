@@ -138,7 +138,6 @@ static Preference<float> m_fTimingWindowAdd	( "TimingWindowAdd",		0 );
 static Preference1D<float> m_fTimingWindowSeconds( TimingWindowSecondsInit, NUM_TimingWindow );
 static Preference<float> m_fTimingWindowJump	( "TimingWindowJump",		0.25 );
 static Preference<float> m_fMaxInputLatencySeconds	( "MaxInputLatencySeconds",	0.0 );
-static Preference<bool> g_bEnableAttackSoundPlayback	( "EnableAttackSounds", true );
 static Preference<bool> g_bEnableMineSoundPlayback	( "EnableMineHitSound", true );
 
 /** @brief How much life is in a hold note when you start on it? */
@@ -501,7 +500,6 @@ static bool NeedsTapJudging( const TapNote &tn )
 	case TapNoteType_Lift:
 		return tn.result.tns == TNS_None;
 	case TapNoteType_HoldTail:
-	case TapNoteType_Attack:
 	case TapNoteType_AutoKeysound:
 	case TapNoteType_Fake:
 	case TapNoteType_Empty:
@@ -524,7 +522,6 @@ static bool NeedsHoldJudging( const TapNote &tn )
 	case TapNoteType_HoldTail:
 	case TapNoteType_Mine:
 	case TapNoteType_Lift:
-	case TapNoteType_Attack:
 	case TapNoteType_AutoKeysound:
 	case TapNoteType_Fake:
 	case TapNoteType_Empty:
@@ -963,12 +960,7 @@ void Player::Update( float fDeltaTime )
 
 	// Check for completely judged rows.
 	UpdateJudgedRows(fDeltaTime);
-
-	// Check for TapNote misses
-	if ( !GAMESTATE->m_bInStepEditor )
-	{
-		UpdateTapNotesMissedOlderThan( GetMaxStepDistanceSeconds() );
-	}
+	UpdateTapNotesMissedOlderThan( GetMaxStepDistanceSeconds() );
 }
 
 // Update a group of holds with shared scoring/life. All of these holds will have the same start row.
@@ -2059,7 +2051,7 @@ void Player::Step( int col, int row, const std::chrono::steady_clock::time_point
 					score = TNS_HitMine;
 			}
 
-			if( pTN->type == TapNoteType_Attack && score > TNS_W4 )
+			if( score > TNS_W4 )
 				score = TNS_W2; // sentinel
 
 			/* AI will generate misses here. Don't handle a miss like a regular
@@ -2530,21 +2522,17 @@ void Player::CrossedRows( int iLastRowCrossed, const std::chrono::steady_clock::
 		// TODO: Can we remove the iLastSeenRow logic and the
 		// autokeysound for loop, since the iterator in this loop will
 		// already be iterating over all of the tracks?
-		if( iRow != iLastSeenRow )
+		if (iRow != iLastSeenRow)
 		{
 			// crossed a new not-empty row
 			iLastSeenRow = iRow;
 
-			// handle autokeysounds here (if not in the editor).
-			if (!GAMESTATE->m_bInStepEditor)
+			for (int t = 0; t < m_NoteData.GetNumTracks(); ++t)
 			{
-				for (int t = 0; t < m_NoteData.GetNumTracks(); ++t)
+				const TapNote &tap = m_NoteData.GetTapNote(t, iRow);
+				if (tap.type == TapNoteType_AutoKeysound)
 				{
-					const TapNote &tap = m_NoteData.GetTapNote(t, iRow);
-					if (tap.type == TapNoteType_AutoKeysound)
-					{
-						PlayKeysound(tap, TNS_None);
-					}
+					PlayKeysound(tap, TNS_None);
 				}
 			}
 		}

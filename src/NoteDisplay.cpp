@@ -1218,7 +1218,7 @@ void NoteDisplay::DrawActor(const TapNote& tn, Actor* pActor, NotePart part,
 	bool bIsAddition, float fPercentFadeToFail, float fColorScale,
 	bool is_being_held)
 {
-	if (tn.type == TapNoteType_AutoKeysound && !GAMESTATE->m_bInStepEditor) return;
+	if (tn.type == TapNoteType_AutoKeysound) return;
 	if(fYOffset < field_args.draw_pixels_after_targets ||
 		fYOffset > field_args.draw_pixels_before_targets)
 	{
@@ -1504,7 +1504,6 @@ void NoteColumnRenderer::DrawPrimitives()
 			case TapNoteType_HoldTail:
 			case TapNoteType_Mine:
 			case TapNoteType_Lift:
-			case TapNoteType_Attack:
 			case TapNoteType_AutoKeysound:
 			case TapNoteType_Fake:
 				if(!tn.result.bHidden)

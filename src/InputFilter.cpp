@@ -111,7 +111,7 @@ namespace
  * this won't cause timing problems, because the event timestamp is preserved. */
 static Preference<float> g_fInputDebounceTime( "InputDebounceTime", 0 );
 
-unique_ptr<InputFilter>	INPUTFILTER;	// global and accessible from anywhere in our program
+InputFilter*	INPUTFILTER = NULL;	// global and accessible from anywhere in our program
 
 static const float TIME_BEFORE_REPEATS = 0.375f;
 
@@ -257,11 +257,6 @@ void InputFilter::CheckButtonChange( ButtonState &bs, DeviceInput di, const std:
 		/* If the last IET_FIRST_PRESS or IET_RELEASE event was sent too recently,
 		 * wait a while before sending it. */
 		if(delta < g_fInputDebounceTime )
-		{
-			return;
-		}
-	} else {
-		if(delta < PREFSMAN->m_fDebounceCoinInputTime )
 		{
 			return;
 		}
