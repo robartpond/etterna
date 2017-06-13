@@ -78,7 +78,14 @@ public:
 	int GetPerminateOffset() const { return m_offset; }
 	void AddItem( WheelItemBaseData *itemdata );
 	void RemoveItem( int index );
-	
+
+	vector<RoomData> * allRooms;
+	vector<RoomData> roomsInWheel;
+	RString search;
+	bool searching;
+	void UpdateRoomsList(vector<RoomData> * m_Roomsptr);
+	void FilterBySearch();
+
 	// Lua
 	void PushSelf(lua_State *L);
 
