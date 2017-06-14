@@ -11,15 +11,25 @@ class RoomData {
 public:
 	void SetName(const RString& name) { m_name = name; }
 	void SetDescription(const RString& desc) { m_description = desc; }
+	void SetSongTitle(RString title) { m_songtitle = title; }
+	void SetSongSubtitle(RString subtitle) { m_songsubtitle = subtitle; }
+	void SetSongArtist(RString artist) { m_songartist = artist; }
 	void SetState(unsigned int state) { m_state = state; }
 	void SetFlags(unsigned int iFlags) { m_iFlags = iFlags; }
 	inline RString Name() { return m_name; }
 	inline RString Description() { return m_description; }
+	inline RString SongTitle() { return m_songtitle; }
+	inline RString SongSubtitle() { return m_songsubtitle; }
+	inline RString SongArtist() { return m_songartist; }
 	inline unsigned int State() { return m_state; }
 	inline unsigned int GetFlags() { return m_iFlags; }
+	vector<RString> m_players;
 private:
 	RString m_name;
 	RString m_description;
+	RString m_songtitle;
+	RString m_songsubtitle;
+	RString m_songartist;
 	unsigned int m_state;
 	unsigned int m_iFlags;
 };

@@ -124,9 +124,22 @@ void ScreenNetRoom::HandleScreenMessage( const ScreenMessage SM )
 					for( int i=0; i<numRooms; ++i )
 						m_Rooms[i].SetState( NSMAN->m_SMOnlinePacket.Read1() );
 
-					for( int i=0; i<numRooms; ++i )
-						m_Rooms[i].SetFlags( NSMAN->m_SMOnlinePacket.Read1() );
-
+					for (int i = 0; i<numRooms; ++i)
+						m_Rooms[i].SetFlags(NSMAN->m_SMOnlinePacket.Read1());
+					//Read players in each room and the selected song's metadata
+					if (NSMAN->GetServerVersion() >= 129)
+					{
+						for (int i = 0; i < numRooms; ++i)
+						{
+							m_Rooms[i].SetSongTitle(NSMAN->m_SMOnlinePacket.ReadNT());
+							m_Rooms[i].SetSongSubtitle(NSMAN->m_SMOnlinePacket.ReadNT());
+							m_Rooms[i].SetSongArtist(NSMAN->m_SMOnlinePacket.ReadNT());
+							int numplayers = NSMAN->m_SMOnlinePacket.Read1();
+							(m_Rooms[i]).m_players.resize(numplayers);
+							for (int j = 0; j < numplayers; ++i)
+								(m_Rooms[i]).m_players[j] = NSMAN->m_SMOnlinePacket.ReadNT();
+						}
+					}
 					if( m_iRoomPlace<0 )
 						m_iRoomPlace=0;
 					if( m_iRoomPlace >= (int) m_Rooms.size() )

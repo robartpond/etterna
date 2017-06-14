@@ -31,6 +31,8 @@ enum NSCommand
 	NSCAttack,		// 14 [SMLC_RESERVED2]
 	XML,		// 15 [SMLC_RESERVED3]
 	FLU,		// 16 [SMLC_FriendListUpdate]
+	CPL,		// 16 [SMLC_ClientPackList]
+	SPL,		// 16 [SMLC_ServerPackList]
 	NUM_NS_COMMANDS
 };
 
@@ -81,6 +83,13 @@ struct NetServerInfo
 {
 	RString Name;
 	RString Address;
+};
+
+struct DownloadablePack
+{
+	RString title;
+	RString URL;
+	int size;
 };
 
 class EzSockets;
@@ -151,6 +160,9 @@ public:
 	//friendlist
 	vector<std::string> fl_PlayerNames;
 	vector<int> fl_PlayerStates;
+
+	//downloadable pack list
+	vector<DownloadablePack> m_PackList;
 
 	// Used for ScreenNetEvaluation
 	vector<EndOfGame_PlayerData> m_EvalPlayerData;

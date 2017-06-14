@@ -2,6 +2,7 @@
 #include "NetworkSyncManager.h"
 #include "LuaManager.h"
 #include "LocalizedString.h"
+#include "SongManager.h"
 #include <errno.h>
 
 NetworkSyncManager *NSMAN;
@@ -731,16 +732,42 @@ void NetworkSyncManager::ProcessInput()
 			break;
 		case FLU:
 			{
-				int PlayersInThisPacket = m_packet.Read1();
+				int playersInThisPacket = m_packet.Read1();
 				fl_PlayerNames.clear();
 				fl_PlayerStates.clear();
-				for (int i = 0; i<PlayersInThisPacket; ++i)
+				for (int i = 0; i<playersInThisPacket; ++i)
 				{
 					int PStatus = m_packet.Read1();
 					fl_PlayerStates.push_back(PStatus);
 					fl_PlayerNames.push_back(m_packet.ReadNT());
 				}
 				SCREENMAN->SendMessageToTopScreen(SM_FriendsUpdate);
+			}
+			break;
+		case CPL:
+			{
+				//Send a list of the packs we have
+				m_packet.ClearPacket();
+				m_packet.Write1(CPL);
+				const vector<RString>& grps = SONGMAN->GetSongGroupNames();
+				for (size_t i = 0; i < grps.size(); ++i) 
+					m_packet.WriteNT(grps[i]);
+				NetPlayerClient->SendPack((char*)m_packet.Data, m_packet.Position);
+			}
+			break;
+		case SPL:
+			{
+				//Read and load downloadable packs
+				m_PackList.clear();
+				int packsInThisPacket = m_packet.Read1();
+				DownloadablePack tmp;
+				for (int i = 0; i<packsInThisPacket; ++i)
+				{
+					tmp.title = m_packet.ReadNT();
+					tmp.URL = m_packet.ReadNT();
+					tmp.size = m_packet.Read2();
+					m_PackList.push_back(tmp);
+				}
 			}
 			break;
 		}
