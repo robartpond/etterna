@@ -206,7 +206,7 @@ unsigned int RoomWheel::GetNumItems() const
 void RoomWheel::FilterBySearch()
 {
 	vector<RoomData> tmp;
-	if(currentSearch.ingame || currentSearch.open || currentSearch.password)
+	if(!(currentSearch.ingame && currentSearch.open && currentSearch.password))
 		for (unsigned int x = 0; x < allRooms->size(); ++x)
 		{
 			if (((*allRooms)[x]).State() == 2 && !currentSearch.ingame)
@@ -260,6 +260,8 @@ void RoomWheel::FilterBySearch()
 }
 void RoomWheel::BuildFromRoomDatas()
 {
+	if (allRooms == NULL)
+		return;
 	if (searching)
 		FilterBySearch();
 	else
@@ -357,7 +359,7 @@ public:
 	}
 	static int Search(T* p, lua_State *L)
 	{
-		if (lua_isnil(L, 1) || lua_isnil(L, 2) || lua_isnil(L, 3) || lua_isnil(L, 4) || lua_isnil(L, 5))
+		if (lua_isnil(L, 5))
 		{
 			p->StopSearch();
 		}
