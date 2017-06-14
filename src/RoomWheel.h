@@ -27,8 +27,8 @@ private:
 struct RoomWheelItemData : public WheelItemBaseData
 {
 	RoomWheelItemData() : m_iFlags(0) { }
-	RoomWheelItemData( WheelItemDataType type, const RString& sTitle, const RString& sDesc, const RageColor &color ):
-		WheelItemBaseData( type, sTitle, color ), m_sDesc(sDesc), m_iFlags(0) { };
+	RoomWheelItemData(WheelItemDataType type, const RString& sTitle, const RString& sDesc, const RageColor &color) :
+		WheelItemBaseData(type, sTitle, color), m_sDesc(sDesc), m_iFlags(0) { };
 
 	RString		m_sDesc;
 	unsigned int	m_iFlags;
@@ -62,6 +62,16 @@ struct RoomInfo
 	vector<RString> players;
 };
 
+struct RoomSearch
+{
+	RString title;
+	RString desc;
+	bool ingame;
+	bool password;
+	bool open;
+};
+
+
 class RoomWheel : public WheelBase
 {
 public:
@@ -81,8 +91,14 @@ public:
 
 	vector<RoomData> * allRooms;
 	vector<RoomData> roomsInWheel;
-	RString search;
+
+	void StopSearch();
+	void Search(RoomSearch findme);
+	RoomSearch currentSearch;
+	RoomSearch lastValidSearch;
 	bool searching;
+
+	void BuildFromRoomDatas();
 	void UpdateRoomsList(vector<RoomData> * m_Roomsptr);
 	void FilterBySearch();
 
