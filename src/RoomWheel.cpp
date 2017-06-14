@@ -30,7 +30,11 @@ void RoomWheel::Load( const RString &sType )
 	LOG->Trace( "RoomWheel::Load('%s')", sType.c_str() );
 
 	searching = false;
-	search = "";
+	currentSearch.title = "";
+	currentSearch.desc = "";
+	currentSearch.ingame = true;
+	currentSearch.open = true;
+	currentSearch.password = true;
 
 	AddPermanentItem( new RoomWheelItemData(WheelItemDataType_Generic, "Create Room", "Create a new game room", THEME->GetMetricC( m_sName, "CreateRoomColor")) );
 
@@ -201,16 +205,61 @@ unsigned int RoomWheel::GetNumItems() const
 
 void RoomWheel::FilterBySearch()
 {
-	RString title;
-	RString desc;
-	bool pw;
-	bool ingame;
-	bool selecting;
-	roomsInWheel = (*allRooms);
+	vector<RoomData> tmp;
+	if(currentSearch.ingame || currentSearch.open || currentSearch.password)
+		for (unsigned int x = 0; x < allRooms->size(); ++x)
+		{
+			if (((*allRooms)[x]).State() == 2 && !currentSearch.ingame)
+				continue;
+			if (((*allRooms)[x]).State() != 2 && !currentSearch.open)
+				continue;
+			if (((*allRooms)[x]).GetFlags() % 2 && !currentSearch.password)
+				continue;
+			RString scoot = ((*allRooms)[x]).Name().MakeLower();
+			size_t res = scoot.find(currentSearch.title);
+			if (res != string::npos)
+			{
+				tmp.emplace_back((*allRooms)[x]);
+				continue;
+			}
+			scoot = ((*allRooms)[x]).Description().MakeLower();
+			res = scoot.find(currentSearch.desc);
+			if (res != string::npos)
+			{
+				tmp.emplace_back((*allRooms)[x]);
+				continue;
+			}
+		}
+	else
+		for (unsigned int x = 0; x < allRooms->size(); ++x)
+		{
+			RString scoot = ((*allRooms)[x]).Name().MakeLower();
+			size_t res = scoot.find(currentSearch.title);
+			if (res != string::npos)
+			{
+				tmp.emplace_back((*allRooms)[x]);
+				continue;
+			}
+			scoot = ((*allRooms)[x]).Description().MakeLower();
+			res = scoot.find(currentSearch.desc);
+			if (res != string::npos)
+			{
+				tmp.emplace_back((*allRooms)[x]);
+				continue;
+			}
+		}
+	if (tmp.size() > 0) {
+		lastValidSearch = currentSearch;
+		roomsInWheel.swap(tmp);
+	}
+	else
+	{
+		currentSearch = lastValidSearch;
+		FilterBySearch();
+	}
 }
-void RoomWheel::UpdateRoomsList(vector<RoomData> * roomsptr)
+void RoomWheel::BuildFromRoomDatas()
 {
-	allRooms = roomsptr;
 	if (searching)
 		FilterBySearch();
 	else
@@ -265,6 +314,27 @@ void RoomWheel::UpdateRoomsList(vector<RoomData> * roomsptr)
 
 	RebuildWheelItems();
 }
+void RoomWheel::UpdateRoomsList(vector<RoomData> * roomsptr)
+{
+	allRooms = roomsptr;
+	BuildFromRoomDatas();
+}
+void RoomWheel::Search(RoomSearch findme)
+{
+	searching = true;
+	currentSearch = findme;
+	BuildFromRoomDatas();
+}
+void RoomWheel::StopSearch()
+{
+	searching = false;
+	currentSearch.title = "";
+	currentSearch.desc = "";
+	currentSearch.ingame = true;
+	currentSearch.open = true;
+	currentSearch.password = true;
+	BuildFromRoomDatas();
+}
 // lua start
 #include "LuaBinding.h"
 
@@ -280,10 +350,35 @@ public:
 		}
 		return 1;
 	}
+	static int StopSearch(T* p, lua_State *L)
+	{
+		p->StopSearch();
+		return 1;
+	}
+	static int Search(T* p, lua_State *L)
+	{
+		if (lua_isnil(L, 1) || lua_isnil(L, 2) || lua_isnil(L, 3) || lua_isnil(L, 4) || lua_isnil(L, 5))
+		{
+			p->StopSearch();
+		}
+		else
+		{
+			RoomSearch findme;
+			findme.title = SArg(1);
+			findme.desc = SArg(2);
+			findme.ingame = BArg(3);
+			findme.ingame = BArg(4);
+			findme.ingame = BArg(5);
+			p->Search(findme);
+		}
+		return 1;
+	}
 
 	LunaRoomWheel()
 	{
 		ADD_METHOD(Move);
+		ADD_METHOD(StopSearch);
+		ADD_METHOD(Search);
 	}
 };
 
