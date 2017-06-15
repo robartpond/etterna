@@ -17,7 +17,7 @@ public:
 
 private:
 	void UpdateText();
-
+	RString hell="";
 	BitmapText m_textStatus;
 };
 

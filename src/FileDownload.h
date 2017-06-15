@@ -21,7 +21,7 @@ public:
 	void Finish();
 	int GetResponseCode() const { return m_iResponseCode; }
 	RString GetResponse() const { return m_sBUFFER; }
-	RString GetStatus() const { return m_sStatus; }
+	RString GetStatus() const { return m_sStatus + " r: " + m_sResponseName + " tbyt "+ to_string(m_iTotalBytes) + " dld " + to_string(m_iDownloaded) + " dling " + (m_bIsDownloading ? "true" : "false") + "\n finshd " + (m_bFinished ? "true" : "false") + " saving " + (m_bSavingFile ? "true" : "false"); }
 private:
 	enum TransferType { download, upload };
 	void StartTransfer(TransferType type, const RString &sURL, const RString &sSrcFile, const RString &sDestFile);

@@ -1,5 +1,6 @@
 #include "global.h"
 #include "StepMania.h"
+#include "curl/curl.h"
 
 int main(int argc, char* argv[]) {
 	return sm_main(argc, argv);

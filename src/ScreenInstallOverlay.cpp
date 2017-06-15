@@ -140,11 +140,12 @@ class DownloadTask
 	} m_DownloadState;
 	PlayAfterLaunchInfo m_playAfterLaunchInfo;
 public:
+	RString superhell="";
 	DownloadTask(const RString &sControlFileUri)
 	{
 		//SCREENMAN->SystemMessage( "Downloading control file." );
 		m_pTransfer = new FileTransfer();
-		m_pTransfer->StartDownload( sControlFileUri, "" );
+		m_pTransfer->StartDownload( sControlFileUri, "tmp" );
 		m_DownloadState = control;
 	}
 	~DownloadTask()
@@ -156,7 +157,7 @@ public:
 		if( m_pTransfer == NULL )
 			return "";
 		else
-			return m_pTransfer->GetStatus();
+			return m_pTransfer->GetStatus() + " o "+ m_pTransfer->GetResponse() + superhell;
 	}
 	bool UpdateAndIsFinished( float fDeltaSeconds, PlayAfterLaunchInfo &playAfterLaunchInfo )
 	{
@@ -170,7 +171,7 @@ public:
 
 				RString sResponse = m_pTransfer->GetResponse();
 				SAFE_DELETE( m_pTransfer );
-
+				superhell = "RUN";
 				Json::Value root;
 				RString sError;
 				if( !JsonUtil::LoadFromString(root, sResponse, sError) )
@@ -273,6 +274,7 @@ public:
 	}
 };
 static vector<DownloadTask*> g_pDownloadTasks;
+static FileTransfer* ft;
 #endif
 
 static bool IsStepManiaProtocol(const RString &arg)
@@ -294,10 +296,12 @@ PlayAfterLaunchInfo DoInstalls( CommandLineActions::CommandLineArgs args )
 	for( int i = 0; i<(int)args.argv.size(); i++ )
 	{
 		RString s = args.argv[i];
+		ft = new FileTransfer();
+		ft->StartDownload(s, "tmp");
 		if( IsStepManiaProtocol(s) )
     {
 #if !defined(WITHOUT_NETWORKING)
-			g_pDownloadTasks.push_back( new DownloadTask(s) );
+			//g_pDownloadTasks.push_back( new DownloadTask(s) );
 #else
       // TODO: Figure out a meaningful log message.
 #endif
@@ -348,12 +352,15 @@ void ScreenInstallOverlay::Update( float fDeltaTime )
  		PlayAfterLaunchInfo pali2 = DoInstalls( args );
 	}
 #if !defined(WITHOUT_NETWORKING)
+	if (ft != NULL)
+		hell = ft->Update(fDeltaTime);
 	for(int i=g_pDownloadTasks.size()-1; i>=0; --i)
 	{
 		DownloadTask *p = g_pDownloadTasks[i];
 		PlayAfterLaunchInfo pali;
 		if( p->UpdateAndIsFinished( fDeltaTime, pali) )
 		{
+			hell = "HELL";
 			playAfterLaunchInfo.OverlayWith(pali);
 			SAFE_DELETE(p);
 			g_pDownloadTasks.erase( g_pDownloadTasks.begin()+i );
@@ -366,7 +373,7 @@ void ScreenInstallOverlay::Update( float fDeltaTime )
 		{
 			vsMessages.push_back( (*pDT)->GetStatus() );
 		}
-		m_textStatus.SetText( join("\n", vsMessages) );
+		m_textStatus.SetText( (ft ? ft->GetStatus() : "") +join("\n", vsMessages)+hell);
 	}
 #endif
 	if( playAfterLaunchInfo.bAnySongChanged )
