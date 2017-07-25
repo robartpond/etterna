@@ -1,0 +1,21 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+.Container {
+height:100px;
+}
+.Sidebar {
+height: 100%;
+position:absolute;
+width:20%;
+float:left;
+margin-right:80%;
+}
+.Content {
+height: 100%;
+margin-left:25%;
+width:75%;
+float:right;
+}
