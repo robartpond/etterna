@@ -2,6 +2,7 @@
 <div class="Content" markdown="1">
 1. <a href="#what">What is 'Til Death?</a>
 1. <a href="#features">Features</a>
+1. <a href="#shortcuts">Unique Keyboard Shortcuts</a>
 
 <a name="what" />
 
@@ -21,4 +22,16 @@ Some of the features that 'Til Death supports are :
 1. Playing and making playlists
 1. Netplay
 1. Changing the color scheme
+
+<a name="shortcuts" />
+
+## Unique Keyboard Shortcuts
+These shortcuts use the names given to the functions that can be set under Config Key/Joy Mappings in the Options menu. 
+
+### While on the Song Selection screen
+
+| Shortcut  | Description |
+| ------------- | ------------- |
+| EffectUp or EffectDown  | Change the song rate in increments of 0.1.  |
+| Select + EffectUp or Select + EffectDown  | Change the song rate in increments of 0.05.  |
 </div>
