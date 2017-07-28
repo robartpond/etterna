@@ -6,6 +6,20 @@
 #include "RageSoundReader_FileReader.h"
 #include "RageFile.h"
 
+namespace avcodec
+{
+	extern "C"
+	{
+#include <libavformat/avformat.h>
+#include <libswscale/swscale.h>
+#include <libavutil/pixdesc.h>
+#include <libavcodec/avcodec.h>
+	}
+};
+
+
+void RegisterProtocols();
+
 class newRageSoundReader_MP3 :
 	public RageSoundReader_FileReader
 {
@@ -17,6 +31,7 @@ public:
 	int Read(float *pBuf, int iSample);
 	int GetSampleRate() const { return 0; };
 	unsigned GetNumChannels() const { return 0; };
+	int GetNextSourceFrame();
 	int GetNextSourceFrame() const { return 0; };
 	newRageSoundReader_MP3();
 	~newRageSoundReader_MP3();
@@ -24,6 +39,9 @@ public:
 	newRageSoundReader_MP3 *Copy() const;
 private:
 	int SampleRate;
+	avcodec::AVCodec *Codec;
+	avcodec::AVCodecContext *Context;
+	avcodec::AVFrame *decoded_frame;
 };
 
 #endif
