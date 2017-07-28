@@ -6,6 +6,28 @@
 #include "RageSoundReader_FileReader.h"
 #include "RageFile.h"
 
+
+namespace avcodec
+{
+	extern "C"
+	{
+		#include <libavformat/avformat.h>
+		#include <libswscale/swscale.h>
+		#include <libavutil/pixdesc.h>
+		#include <libavutil/opt.h>
+		#include <libavcodec/avcodec.h>
+		#include <libavutil/channel_layout.h>
+		#include <libavutil/common.h>
+		#include <libavutil/imgutils.h>
+		#include <libavutil/mathematics.h>
+		#include <libavutil/samplefmt.h>
+	}
+};
+
+#define INBUF_SIZE 4096
+#define AUDIO_INBUF_SIZE 8192
+#define AUDIO_REFILL_THRESH 4096
+
 struct madlib_t;
 
 typedef unsigned long id3_length_t;
@@ -38,6 +60,24 @@ private:
 	bool m_bAccurateSync;
 
 	madlib_t *mad;
+
+	//Codec to decode with
+    avcodec::AVCodec *codec;
+	//Codec context
+    avcodec::AVCodecContext *Context;
+	//Packet used to decode frames
+    avcodec::AVPacket avpkt;
+	//Last decoded frame
+    avcodec::AVFrame *decoded_frame;
+	int length;
+	//Inner buffer to read the file
+	uint8_t inbuf[AUDIO_INBUF_SIZE + 32];
+	int nbDecodedFrames;
+	float decoded_data[AUDIO_INBUF_SIZE + 32];
+	//Decode the whole file
+	int DoFFMPEGDecode();
+	//Decode one frame
+	int DoFFMPEGFrameDecode();;
 
 
 	bool MADLIB_rewind();

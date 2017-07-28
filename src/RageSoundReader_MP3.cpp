@@ -19,9 +19,15 @@ enum tagtype {
   TAGTYPE_ID3V2_FOOTER
 };
 
+/* Return values for DoFFMPEGDecode() and DoFFMPEGFrameDecode(). */
+enum {
+	READ_OK = 1,
+	ERROR = -1,
+	END_OF_FILE = -2
+};
 static const int ID3_TAG_FLAG_FOOTERPRESENT = 0x10;
 
-static tagtype tagtype( const unsigned char *data, id3_length_t length )
+static tagtype getTagtype( const unsigned char *data, id3_length_t length )
 {
 	if (length >= 3 &&
 		data[0] == 'T' && data[1] == 'A' && data[2] == 'G')
@@ -95,7 +101,7 @@ signed long id3_tag_query( const unsigned char *data, id3_length_t length )
 	int flags;
 	id3_length_t size;
 
-	switch (tagtype(data, length))
+	switch (getTagtype(data, length))
 	{
 	case TAGTYPE_ID3V1:
 		return 128;
@@ -384,8 +390,85 @@ void fill_frame_index_cache( madlib_t *mad )
 	mad->tocmap[mad->Timer] = pos;
 }
 
+int RageSoundReader_MP3::DoFFMPEGDecode()
+{
+	avpkt.data = inbuf;
+	int len = m_pFile->Read(inbuf, AUDIO_INBUF_SIZE);
+	int ret = 0;
+	//avpkt.size = fread(inbuf, 1, AUDIO_INBUF_SIZE, f);
+	while (ret>0) {
+		ret = DoFFMPEGFrameDecode();
+	}
+	return ret;
+}
+
+int RageSoundReader_MP3::DoFFMPEGFrameDecode()
+{
+	if (avpkt.size <= 0)
+		return END_OF_FILE;
+	int frameSize;
+	int readSize;
+	int i, ch;
+	int got_frame = 0;
+	if (!decoded_frame) {
+		if (!(decoded_frame = avcodec::av_frame_alloc())) {
+			SetError("Could not allocate audio frame\n");
+			return ERROR;
+			//fprintf(stderr, "Could not allocate audio frame\n");
+			//exit(1);
+		}
+	}
+	frameSize = avcodec::avcodec_decode_audio4(Context, decoded_frame, &got_frame, &avpkt);
+	if (frameSize < 0) {
+		SetError("Error while decoding\n");
+		return ERROR;
+		//fprintf(stderr, "Error while decoding\n");
+		//exit(1);
+	}
+	if (got_frame) {
+		/* if a frame has been decoded, output it */
+		int data_size = avcodec::av_get_bytes_per_sample(Context->sample_fmt);
+		if (data_size < 0) {
+			/* This should not occur, checking just for paranoia */
+			SetError("Failed to calculate data size\n");
+			return ERROR;
+			//fprintf(stderr, "Failed to calculate data size\n");
+			//exit(1);
+		}
+		//decoded_frames->emplace_back(decoded_frame);
+		for (i = 0; i < decoded_frame->nb_samples; i++)
+			for (ch = 0; ch < Context->channels; ch++) {
+				//fwrite(decoded_frame->data[ch] + data_size*i, 1, data_size, outfile);
+				//Copy the data to the decoded_data buffer
+				memcpy(decoded_data, decoded_frame->data[ch] + data_size*i, data_size);
+				++nbDecodedFrames;
+			}
+	}
+	avpkt.size -= frameSize;
+	avpkt.data += frameSize;
+	avpkt.dts =
+		avpkt.pts = AV_NOPTS_VALUE;
+	if (avpkt.size < AUDIO_REFILL_THRESH) {
+		/* Refill the input buffer, to avoid trying to decode
+		* incomplete frames. Instead of this, one could also use
+		* a parser, or use a proper container format through
+		* libavformat. */
+		memmove(inbuf, avpkt.data, avpkt.size);
+		avpkt.data = inbuf;
+		//len = fread(avpkt.data + avpkt.size, 1, AUDIO_INBUF_SIZE - avpkt.size, f);
+		readSize = m_pFile->Read(inbuf, AUDIO_INBUF_SIZE);
+		if (readSize < 0)
+		{
+			SetError(m_pFile->GetError());
+			return -1;
+		}
+		if (readSize > 0)
+			avpkt.size += readSize;
+	}
+	return READ_OK;
+}
 /* Handle first-stage decoding: extracting the MP3 frame data. */
-int RageSoundReader_MP3::do_mad_frame_decode( bool headers_only )
+int RageSoundReader_MP3::do_mad_frame_decode(bool headers_only)
 {
 	int bytes_read = 0;
 
@@ -615,6 +698,11 @@ RageSoundReader_MP3::RageSoundReader_MP3()
 	mad->timer_accurate = 1;
 	mad->bitrate = -1;
 	mad->first_frame = true;
+
+	codec = avcodec::avcodec_find_decoder(avcodec::AV_CODEC_ID_MP3);
+	avcodec::av_init_packet(&avpkt);
+	Context = avcodec::avcodec_alloc_context3(codec);
+	nbDecodedFrames = 0;
 }
 
 RageSoundReader_MP3::~RageSoundReader_MP3()
@@ -623,17 +711,45 @@ RageSoundReader_MP3::~RageSoundReader_MP3()
 	mad_frame_finish( &mad->Frame );
 	mad_stream_finish( &mad->Stream );
 
+	avcodec::avcodec_close(Context);
+	avcodec::av_free(Context);
+	avcodec::av_frame_free(&decoded_frame);
+
 	delete mad;
 }
 
 RageSoundReader_FileReader::OpenResult RageSoundReader_MP3::Open( RageFileBasic *pFile )
 {
 	m_pFile = pFile;
+	avcodec::avcodec_close(Context);
+	avcodec::av_free(Context);
+	avcodec::av_frame_free(&decoded_frame);
+	codec = avcodec::avcodec_find_decoder(avcodec::AV_CODEC_ID_MP3);
+	avcodec::av_init_packet(&avpkt);
+	Context = avcodec::avcodec_alloc_context3(codec);
+	nbDecodedFrames = 0;
 
-	mad->filesize = m_pFile->GetFileSize();
+	int ret = DoFFMPEGFrameDecode();
+	switch (ret)
+	{
+	case -1:
+		SetError(GetError() + " (not an MP3 stream?)");
+		return OPEN_UNKNOWN_FILE_FORMAT;
+	};
+	SampleRate = avcodec::av_frame_get_sample_rate(decoded_frame);
+	this->Channels = avcodec::av_frame_get_channels(decoded_frame);
+	if (length == -1)
+	{
+		// If vbr and !xing, this is just an estimate. 
+		int bps = Context->bit_rate/ 8;
+		float secs = (float)(m_pFile->GetFileSize() - (Context->header_bits/8)) / bps;
+		length = (int)(secs * 1000.f);
+	};
+	/*
+	filesize = m_pFile->GetFileSize();
 	ASSERT( mad->filesize != -1 );
 
-	/* Make sure we can decode at least one frame.  This will also fill in header info. */
+	// Make sure we can decode at least one frame.  This will also fill in header info. 
 	mad->outpos = 0;
 
 	int ret = do_mad_frame_decode();
@@ -647,26 +763,26 @@ RageSoundReader_FileReader::OpenResult RageSoundReader_MP3::Open( RageFileBasic 
 		return OPEN_UNKNOWN_FILE_FORMAT;
 	}
 
-	/* Store the bitrate of the frame we just got. */
-	if( mad->bitrate == -1 ) /* might have been set by a Xing tag */
+	// Store the bitrate of the frame we just got. 
+	if( mad->bitrate == -1 ) /. might have been set by a Xing tag 
 		mad->bitrate = mad->Frame.header.bitrate;
 
 	SampleRate = mad->Frame.header.samplerate;
 	mad->framelength = mad->Frame.header.duration;
 	this->Channels = MAD_NCHANNELS( &mad->Frame.header );
 
-	/* Since we've already decoded a frame, just synth it instead of rewinding
-	 * the stream. */
+	// Since we've already decoded a frame, just synth it instead of rewinding
+	//  the stream. 
 	synth_output();
 
 	if(mad->length == -1)
 	{
-		/* If vbr and !xing, this is just an estimate. */
+		// If vbr and !xing, this is just an estimate. 
 		int bps = mad->bitrate / 8;
 		float secs = (float)(mad->filesize - mad->header_bytes) / bps;
 		mad->length = (int)(secs * 1000.f);
 	}
-
+	*/
 	return OPEN_OK;
 }
 
@@ -684,6 +800,8 @@ RageSoundReader_MP3 *RageSoundReader_MP3::Copy() const
 	ret->mad->framelength = mad->framelength;
 	ret->Channels = Channels;
 	ret->mad->length = mad->length;
+	ret->nbDecodedFrames = 0;
+	ret->length = length;
 
 //	int n = ret->do_mad_frame_decode();
 //	ASSERT( n > 0 );
@@ -696,8 +814,23 @@ int RageSoundReader_MP3::Read( float *buf, int iFrames )
 {
 	int iFramesWritten = 0;
 
-	while( iFrames > 0 )
-	{
+	while( iFrames > 0 ) {
+		if (nbDecodedFrames > 0)
+		{
+			int iFramesToCopy = min(iFrames, int(nbDecodedFrames / GetNumChannels()));
+			const int iSamplesToCopy = iFramesToCopy * GetNumChannels();
+			const int iBytesToCopy = iSamplesToCopy * sizeof(float);
+
+			memcpy(buf, decoded_data, iBytesToCopy);
+
+			buf += iSamplesToCopy;
+			iFrames -= iFramesToCopy;
+			iFramesWritten += iFramesToCopy;
+			mad->outpos += iSamplesToCopy;
+			mad->outleft -= iSamplesToCopy;
+			continue;
+
+		}
 		if( mad->outleft > 0 )
 		{
 			int iFramesToCopy = min( iFrames, int(mad->outleft / GetNumChannels()) );
@@ -714,14 +847,18 @@ int RageSoundReader_MP3::Read( float *buf, int iFrames )
 			continue;
 		}
 
-		/* Decode more from the MP3 stream. */
+		/*
+		// Decode more from the MP3 stream. 
 		int ret = do_mad_frame_decode();
 		if( ret == 0 )
 			return END_OF_FILE;
 		if( ret == -1 )
 			return ERROR;
-
 		synth_output();
+		*/
+		int ret = DoFFMPEGFrameDecode();
+		if (ret <= 0)
+			return ret;
 	}
 
 	return iFramesWritten;
@@ -1059,12 +1196,7 @@ int RageSoundReader_MP3::GetLengthInternal( bool fast )
 
 int RageSoundReader_MP3::GetLengthConst( bool fast ) const
 {
-	RageSoundReader_MP3 *pCopy = this->Copy();
-
-	int iLength = pCopy->GetLengthInternal( fast );
-
-	delete pCopy;
-	return iLength;
+	return length;
 }
 
 
