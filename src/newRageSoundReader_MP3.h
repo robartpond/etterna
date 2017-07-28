@@ -26,22 +26,31 @@ class newRageSoundReader_MP3 :
 public:
 	OpenResult Open(RageFileBasic *pFile); 
 	void Close();
-	int GetLength() const;
+	int GetLength() const { return length; }
 	int SetPosition(int iFrame);
 	int Read(float *pBuf, int iSample);
-	int GetSampleRate() const { return 0; };
-	unsigned GetNumChannels() const { return 0; };
+	int GetSampleRate() const { return sampleRate; }
+	unsigned GetNumChannels() const { return numChannels; }
 	int GetNextSourceFrame();
-	int GetNextSourceFrame() const { return 0; };
+	int GetNextSourceFrame() const { return curFrame+1; };
 	newRageSoundReader_MP3();
 	~newRageSoundReader_MP3();
 	newRageSoundReader_MP3(const newRageSoundReader_MP3 &); /* not defined; don't use */
 	newRageSoundReader_MP3 *Copy() const;
 private:
-	int SampleRate;
-	avcodec::AVCodec *Codec;
-	avcodec::AVCodecContext *Context;
-	avcodec::AVFrame *decoded_frame;
+	int sampleRate;
+	int length;
+	int numChannels;
+	int numSamples;
+	int bitrate;
+	unsigned int curFrame;
+	unsigned int curSample;
+	unsigned int curChannel;
+	avcodec::AVCodec *codec; 
+	avcodec::AVCodecContext *codecCtx;
+	avcodec::AVFrame *decodedFrame;
+	int WriteSamples(void *pBuf, int samples);
+	int ReadAFrame();
 };
 
 #endif

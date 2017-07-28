@@ -3,10 +3,12 @@
 
 newRageSoundReader_MP3::newRageSoundReader_MP3()
 {
-	SampleRate=0;
-	Codec=NULL;
-	Context=NULL;
-	decoded_frame=NULL;
+	codec=NULL;
+	codecCtx = NULL;
+	decodedFrame=NULL;
+	length = 0;
+	numChannels = 0;
+	sampleRate = 1;
 }
 
 
@@ -27,58 +29,174 @@ void RegisterProtocols()
 RageSoundReader_FileReader::OpenResult newRageSoundReader_MP3::Open(RageFileBasic *pFile)
 {
 	RegisterProtocols();
-	avcodec::av_register_all(); 
-	uint8_t buffer[20480 + 32];
-	if (Codec)
-		avcodec::av_free(Codec);
-	if (Context)
-		avcodec::avcodec_close(Context);
-	if (decoded_frame)
-		avcodec::av_frame_free(&decoded_frame);
+	m_pFile = pFile;
 
-	Codec = avcodec::avcodec_find_decoder(avcodec::AV_CODEC_ID_MP3);
-	if (!Codec) {
+	if (codec)
+		avcodec::av_free(codec);
+	if (codecCtx)
+		avcodec::avcodec_close(codecCtx);
+	if (decodedFrame)
+		avcodec::av_frame_free(&decodedFrame);
+
+	codec = avcodec::avcodec_find_decoder(avcodec::AV_CODEC_ID_MP3);
+	if (!codec) {
 		SetError("Error finding decoder");
 		return OPEN_UNKNOWN_FILE_FORMAT;
 	}
-	Context = avcodec::avcodec_alloc_context3(Codec);
-	if (!Context) {
+
+	codecCtx = avcodec::avcodec_alloc_context3(codec);
+	if (!codecCtx) {
 		SetError("Error allocating context");
 		return OPEN_UNKNOWN_FILE_FORMAT;
 	}
-	/* open it */
-	if (avcodec::avcodec_open2(Context, Codec, NULL) < 0) {
+	
+	if (avcodec::avcodec_open2(codecCtx, codec, NULL) < 0) {
 		SetError("Error opening decoder");
-		return OPEN_UNKNOWN_FILE_FORMAT;;
+		return OPEN_UNKNOWN_FILE_FORMAT;
 	}
+	switch (ReadAFrame()) {
+	case -1:
+		return OPEN_UNKNOWN_FILE_FORMAT;
+		break;
+	case -2:
+		SetError("Couldn't read a frame");
+		return OPEN_UNKNOWN_FILE_FORMAT;
+		break;
+	};
+	numChannels = codecCtx->channels;
+	int numSamples = decodedFrame->nb_samples;
+	bitrate = codecCtx->bit_rate;
+	sampleRate = codecCtx->sample_rate;
+	//Aproximation to the length?
+	length = m_pFile->GetFileSize() / bitrate;
+	return OPEN_OK;
+}
 
-	avcodec::AVPacket avpkt;
-	avcodec::av_init_packet(&avpkt);
-	decoded_frame = NULL;
-	m_pFile = pFile;
-	avpkt.data = buffer;
-	avpkt.size = m_pFile->Read(buffer, 20480);
-	if(decoded_frame)
-		av_frame_free(&decoded_frame);
-	decoded_frame = avcodec::av_frame_alloc();
-	while (avpkt.size > 0) {
-		if (!decoded_frame) {
-			if (!(decoded_frame = avcodec::av_frame_alloc()))
-				SetError("Error allocating memory for frame"); {
-				return OPEN_UNKNOWN_FILE_FORMAT;
+
+newRageSoundReader_MP3 *newRageSoundReader_MP3::Copy() const 
+{
+	newRageSoundReader_MP3 *ret = new newRageSoundReader_MP3;
+	RageFileBasic *pFile = m_pFile->Copy();
+	pFile->Seek(0);
+	ret->Open(pFile);
+	return ret;
+}
+
+//0=> EOF. -1=> Error . >=0 => Properly SetPosition
+int newRageSoundReader_MP3::SetPosition(int iFrame)
+{
+	return -1;
+}
+
+//I think this is supposed to read samples, not frames
+//Each sample being a float to be stored in the buffer
+//So we need to read and decode a frame(Each frame has 1 or more channels and each has samples) if needed
+//Then read samples from the frame until the frame finishes or we read enough samples
+//Then either return the samples read or read and decode another frame
+int newRageSoundReader_MP3::Read(float *pBuf, int iFrames)
+{
+	char* buf = (char*)(pBuf);//Increases by 1 byte
+	unsigned int samplesToRead = iFrames;
+	if (decodedFrame) {
+		samplesToRead -= WriteSamples(buf, samplesToRead);
+	}
+	if (samplesToRead <= 0)
+		return iFrames;
+	while (samplesToRead > 0) {
+		switch (ReadAFrame()) {
+		case -1:
+			return ERROR;
+			break;
+		case -2:
+			SetError("EOF");
+			return END_OF_FILE;
+			break;
+		};
+		samplesToRead -= WriteSamples(buf+iFrames-samplesToRead, samplesToRead);
+	}
+	return iFrames-samplesToRead;
+}
+
+//Return: -1=> Error already set. >=0 => BytesWritten
+int newRageSoundReader_MP3::WriteSamples(void *pBuf, int samplesToRead)
+{
+	char *buf = (char*)(pBuf);
+	int dataSize = avcodec::av_get_bytes_per_sample(codecCtx->sample_fmt);
+	int i, ch;
+	if (dataSize < 0) {
+		SetError("Error while reading (No data)");
+		return -1;
+	}
+	unsigned int firstSample = curSample;
+	unsigned int firstChannel = curChannel;
+	unsigned int samplesWritten = 0;
+	if((numChannels-curChannel) * (numSamples-curSample) <= samplesToRead)
+		for (; curChannel < numChannels; curChannel++) {
+			for (; curSample < numSamples; curSample++) {
+				memcpy(buf + samplesWritten, decodedFrame->data[ch] + dataSize*curSample, dataSize);
+				samplesWritten++;
+			}
+			curSample = 0;
+		}
+	else
+		for (; curChannel < numChannels; curChannel++) {
+			if (numSamples - curSample <= samplesToRead) {
+				for (; curSample < numSamples; curSample++) {
+					memcpy(buf + samplesWritten, decodedFrame->data[ch] + dataSize*curSample, dataSize);
+					samplesWritten++;
+				}
+				curSample = 0;
+			}
+			else {
+				for (; curSample < samplesToRead; curSample++) {
+					memcpy(buf + samplesWritten, decodedFrame->data[ch] + dataSize*curSample, dataSize);
+					samplesWritten++;
+				}
+				return samplesWritten;
 			}
 		}
-		int got_frame = 0;
-		int len = avcodec_decode_audio4(Context, decoded_frame, &got_frame, &avpkt);
-		if (got_frame) {
-			return OPEN_OK;
+	//Free the frame since we've read it all
+	avcodec::av_frame_free(&decodedFrame);
+	return samplesWritten;
+
+}
+
+//Return: -1 => Error already set. -2 => EOF. >=0 => bytesRead
+int newRageSoundReader_MP3::ReadAFrame()
+{
+	uint8_t buffer[20480 + 32];
+	unsigned int bytesRead = 0;
+	avcodec::AVPacket avpkt;
+	avcodec::av_init_packet(&avpkt);
+	avpkt.data = buffer;
+	avpkt.size = m_pFile->Read(buffer, 20480);
+	bytesRead += avpkt.size;
+	if (decodedFrame)
+		avcodec::av_frame_free(&decodedFrame);
+	decodedFrame = avcodec::av_frame_alloc();
+	while (avpkt.size > 0) {
+		if (!decodedFrame) {
+			if (!(decodedFrame = avcodec::av_frame_alloc()))
+				SetError("Error allocating memory for frame"); {
+				return -1;
+			}
+		}
+		int gotFrame = 0;
+		int len = avcodec_decode_audio4(codecCtx, decodedFrame, &gotFrame, &avpkt);
+		avpkt.size -= len;
+		avpkt.data += len;
+		if (gotFrame) {
+			//Go back to the beginning of the next frame
+			curFrame++;
+			curChannel = 0;
+			curSample = 0;
+			m_pFile->Seek(m_pFile->Tell() - avpkt.size);
+			return bytesRead-avpkt.size;
 		}
 		if (len < 0) {
 			SetError("Error decoding");
-			return OPEN_UNKNOWN_FILE_FORMAT;
+			return -1;
 		}
-		avpkt.size -= len;
-		avpkt.data += len;
 		avpkt.dts =
 			avpkt.pts = AV_NOPTS_VALUE;
 		if (avpkt.size < 4096) {
@@ -90,38 +208,18 @@ RageSoundReader_FileReader::OpenResult newRageSoundReader_MP3::Open(RageFileBasi
 			avpkt.data = buffer;
 			uint8_t aux[1024];
 			len = m_pFile->Read(avpkt.data + avpkt.size, 20480 - avpkt.size);
-			if (len > 0)
+			if (len > 0) {
 				avpkt.size += len;
+				bytesRead += len;
+			} else {
+				return -2;
+			}
+
 		}
 	}
-	SetError("Couldn't read a frame");
-	return OPEN_UNKNOWN_FILE_FORMAT;
 }
 
-int newRageSoundReader_MP3::GetLength() const
-{
-	return 0;
-}
-
-newRageSoundReader_MP3 *newRageSoundReader_MP3::Copy() const 
-{
-	newRageSoundReader_MP3 *ret = new newRageSoundReader_MP3;
-	RageFileBasic *pFile = m_pFile->Copy();
-	pFile->Seek(0);
-	ret->Open(pFile);
-	return ret;
-}
-
-int newRageSoundReader_MP3::SetPosition(int iFrame)
-{
-	return 2;
-}
-
-int newRageSoundReader_MP3::Read(float *pBuf, int iFrames)
-{
-	return 0;
-}
 int newRageSoundReader_MP3::GetNextSourceFrame()
 {
-	return 0;
+	return -1;
 }
