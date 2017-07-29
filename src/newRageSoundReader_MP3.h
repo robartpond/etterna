@@ -40,12 +40,16 @@ public:
 private:
 	int sampleRate;
 	int length;
+	uint8_t buffer[20480 + 64];
+	int audioStream;
 	int numChannels;
+	avcodec::AVIOContext* IOCtx;
+	avcodec::AVFormatContext* formatCtx;
 	int numSamples;
 	int bitrate;
-	unsigned int curFrame;
-	unsigned int curSample;
-	unsigned int curChannel;
+	int curFrame;
+	int curSample;
+	int curChannel;
 	avcodec::AVCodec *codec; 
 	avcodec::AVCodecContext *codecCtx;
 	avcodec::AVFrame *decodedFrame;
