@@ -69,7 +69,7 @@ RageSoundReader_FileReader::OpenResult newRageSoundReader_MP3::Open(RageFileBasi
 	if (decodedFrame)
 		avcodec::av_frame_free(&decodedFrame);
 
-	IOCtx = avcodec::avio_alloc_context(buffer, 20480 + 64,  // internal Buffer and its size
+	IOCtx = avcodec::avio_alloc_context(buffer, 20480,  // internal Buffer and its size
 		0,                  // bWriteable (1=true,0=false) 
 		pFile,          // user data ; will be passed to our callback functions
 		ReadFunc,
@@ -82,7 +82,7 @@ RageSoundReader_FileReader::OpenResult newRageSoundReader_MP3::Open(RageFileBasi
 
 	// Determining the input format:
 	int readBytes = 0;
-	readBytes += m_pFile->Read(buffer, 20480 + 64);
+	readBytes += m_pFile->Read(buffer, 20480);
 	m_pFile->Seek(0, SEEK_SET);
 	avcodec::AVProbeData probeData;
 	probeData.buf = buffer;
@@ -147,21 +147,10 @@ RageSoundReader_FileReader::OpenResult newRageSoundReader_MP3::Open(RageFileBasi
 	curFrame = 0;
 	curChannel = 0;
 	curSample = 0;
-	switch (ReadAFrame()) {
-	case -1:
-		return OPEN_UNKNOWN_FILE_FORMAT;
-		break;
-	case -2:
-		SetError("Couldn't read a frame");
-		return OPEN_UNKNOWN_FILE_FORMAT;
-		break;
-	};
 	numChannels = codecCtx->channels;
-	numSamples = decodedFrame->nb_samples;
 	bitrate = codecCtx->bit_rate;
 	sampleRate = codecCtx->sample_rate;
-	//Aproximation to the length?
-	length = m_pFile->GetFileSize() / bitrate;
+	length = formatCtx->duration;;
 	return OPEN_OK;
 }
 
@@ -178,15 +167,13 @@ newRageSoundReader_MP3 *newRageSoundReader_MP3::Copy() const
 //0=> EOF. -1=> Error . >=0 => Properly SetPosition
 int newRageSoundReader_MP3::SetPosition(int iFrame)
 {
-	return avcodec::av_seek_frame(formatCtx, audioStream, iFrame, AVSEEK_FLAG_ANY);
+	if (decodedFrame)
+		avcodec::av_frame_free(&decodedFrame);
+	return avcodec::av_seek_frame(formatCtx, audioStream, (int64_t)iFrame, AVSEEK_FLAG_ANY);
 }
 
-//I think this is supposed to read samples, not frames
-//Each sample being a float to be stored in the buffer
-//So we need to read and decode a frame(Each frame has 1 or more channels and each has samples) if needed
-//Then read samples from the frame until the frame finishes or we read enough samples
-//Then either return the samples read or read and decode another frame
-int newRageSoundReader_MP3::Read(float *pBuf, int iFrames)
+/*
+int newRageSoundReader_MP3::ReadSample(float *pBuf, int iFrames)
 {
 	char* buf = (char*)(pBuf);//Increases by 1 byte
 	unsigned int samplesToRead = iFrames;
@@ -211,16 +198,121 @@ int newRageSoundReader_MP3::Read(float *pBuf, int iFrames)
 	return iFrames-samplesToRead;
 }
 
+
+int newRageSoundReader_MP3::ReadFrame(float *pBuf, int iFrames)
+{
+	if (iFrames <= 0)
+		return 0;
+	char* buf = (char*)(pBuf);//Increases by 1 byte
+	unsigned int framesRead = 0;
+	if (decodedFrame != NULL) {
+		if (!WriteFrame(buf))
+			return 0;
+		framesRead++;
+	}
+	while (framesRead < iFrames) {
+		int a = ReadAFrame();
+		switch (a) {
+		case -1:
+			break;
+		case -2:
+			SetError("EOF");
+			break;
+		};
+		if (!WriteFrame(buf + framesRead*dataSize*numSamples*numChannels))
+			break;
+		framesRead++;
+	}
+	return framesRead;
+}
+*/
+//I think this is supposed to read samples, not frames
+//Each sample being a float to be stored in the buffer
+//So we need to read and decode a frame(Each frame has 1 or more channels and each has samples) if needed
+//Then read samples from the frame until the frame finishes or we read enough samples
+//Then either return the samples read or read and decode another frame
+int newRageSoundReader_MP3::Read(float *pBuf, int iFrames)
+{
+	char* buf = (char*)(pBuf);//Increases by 1 byte
+	int samplesRead = 0;
+	if (iFrames <= 0)
+		return iFrames;
+	if (decodedFrame != NULL) {
+		if (!WriteSamplesForAllChannels(buf, iFrames))
+			return 0;
+		samplesRead++;
+	}
+	while (samplesRead < iFrames) {
+		switch (ReadAFrame()) {
+		case -1:
+			return ERROR;
+			break;
+		case -2:
+			SetError("EOF");
+			return END_OF_FILE;
+			break;
+		};
+		samplesRead += WriteSamplesForAllChannels(buf + samplesRead*numChannels, iFrames-samplesRead);
+	}
+	return samplesRead;
+}
+
+//Write samplesToRead samples for each channel.
+//Also, the data is stored as follows: [sample1ch1,sample1ch2,sample1ch2,..]
+int newRageSoundReader_MP3::WriteSamplesForAllChannels(void *pBuf, int samplesToRead)
+{
+	char *buf = (char*)(pBuf);
+
+	unsigned int samplesWritten = 0;
+	if ((numSamples - curSample) <= samplesToRead) {
+		for (; curSample < numSamples; curSample++) {
+			for (curChannel=0; curChannel < numChannels; curChannel++)
+				memcpy(buf + samplesWritten*numChannels + curChannel, decodedFrame->data[curChannel] + dataSize*curSample, dataSize);
+			samplesWritten++;
+		}
+		//Free the frame since we've read it all
+		avcodec::av_frame_free(&decodedFrame);
+		curSample = 0;
+	}
+	else {
+		for (; curSample < samplesToRead; curSample++) {
+			for (curChannel=0; curChannel < numChannels; curChannel++)
+				memcpy(buf + samplesWritten*numChannels + curChannel, decodedFrame->data[curChannel] + dataSize*curSample, dataSize);
+			samplesWritten++;
+		}
+	}
+	return samplesWritten;
+
+}
 //Return: -1=> Error already set. >=0 => SamplesWritten
+int newRageSoundReader_MP3::WriteFrame(char *buf)
+{
+	if (!decodedFrame) {
+		int a = ReadAFrame();
+		switch (a) {
+		case -1:
+			return 0;
+			break;
+		case -2:
+			SetError("EOF");
+			return 0;
+			break;
+		};
+	}
+	int samplesWritten = 0;
+	for (curChannel=0; curChannel < numChannels; curChannel++)
+		for (curSample=0; curSample < numSamples; curSample++,samplesWritten++)
+			memcpy(buf + samplesWritten, decodedFrame->data[curChannel] + dataSize*curSample, dataSize);
+	//Free the frame since we've read it all
+	avcodec::av_frame_free(&decodedFrame);
+	curChannel = 0;
+	curSample = 0;
+	return samplesWritten;
+}
 int newRageSoundReader_MP3::WriteSamples(void *pBuf, int samplesToRead)
 {
 	char *buf = (char*)(pBuf);
-	int dataSize = avcodec::av_get_bytes_per_sample(codecCtx->sample_fmt);
 
-	if (dataSize < 0) {
-		SetError("Error while reading (No data)");
-		return -1;
-	}
 	if (!decodedFrame) {
 		int a = ReadAFrame();
 		switch (a) {
@@ -236,7 +328,6 @@ int newRageSoundReader_MP3::WriteSamples(void *pBuf, int samplesToRead)
 	unsigned int firstSample = curSample;
 	unsigned int firstChannel = curChannel;
 	unsigned int samplesWritten = 0;
-	numSamples = decodedFrame->nb_samples;
 	if((numChannels-curChannel) * (numSamples-curSample) <= samplesToRead)
 		for (; curChannel < numChannels; curChannel++) {
 			for (; curSample < numSamples; curSample++) {
@@ -298,6 +389,8 @@ int newRageSoundReader_MP3::ReadAFrame()
 					curFrame++;
 					curChannel = 0;
 					curSample = 0;
+					numSamples = decodedFrame->nb_samples;
+					dataSize = avcodec::av_get_bytes_per_sample(codecCtx->sample_fmt);
 					//m_pFile->Seek(m_pFile->Tell() - avpkt.size);
 					//return bytesRead-avpkt.size;
 					int read = avpkt.size;

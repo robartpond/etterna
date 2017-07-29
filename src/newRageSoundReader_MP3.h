@@ -45,8 +45,11 @@ private:
 	int numChannels;
 	avcodec::AVIOContext* IOCtx;
 	avcodec::AVFormatContext* formatCtx;
-	int numSamples;
+	int numSamples; 
+	int WriteSamplesForAllChannels(void *pBuf, int samplesToRead);
 	int bitrate;
+	int dataSize;
+	int WriteFrame(char *pBuf);
 	int curFrame;
 	int curSample;
 	int curChannel;
