@@ -28,11 +28,11 @@ public:
 	void Close();
 	int GetLength() const { return length; }
 	int SetPosition(int iFrame);
+	int aux;
 	int Read(float *pBuf, int iSample);
 	int GetSampleRate() const { return sampleRate; }
 	unsigned GetNumChannels() const { return numChannels; }
-	int GetNextSourceFrame();
-	int GetNextSourceFrame() const { return curFrame+1; };
+	int GetNextSourceFrame() const ;
 	newRageSoundReader_MP3();
 	~newRageSoundReader_MP3();
 	newRageSoundReader_MP3(const newRageSoundReader_MP3 &); /* not defined; don't use */

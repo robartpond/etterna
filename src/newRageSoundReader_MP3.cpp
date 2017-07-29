@@ -1,5 +1,75 @@
 #include "newRageSoundReader_MP3.h"
 #include <io.h>
+#include "RageUtil.h"
+
+
+
+namespace
+{
+	/* pBuf contains iSamples 8-bit samples; convert to 16-bit.  pBuf must
+	* have enough storage to hold the resulting data. */
+	void Convert8bitToFloat(void *pBuf, int iSamples)
+	{
+		/* Convert in reverse, so we can do it in-place. */
+		const uint8_t *pIn = (uint8_t *)pBuf;
+		float *pOut = (float *)pBuf;
+		for (int i = iSamples - 1; i >= 0; --i)
+		{
+			int iSample = pIn[i];
+			iSample -= 128; /* 0..255 -> -128..127 */
+			pOut[i] = iSample / 128.0f;
+		}
+	}
+
+	/* Flip 16-bit samples if necessary.  On little-endian systems, this will
+	* optimize out. */
+	void ConvertLittleEndian16BitToFloat(void *pBuf, int iSamples)
+	{
+		/* Convert in reverse, so we can do it in-place. */
+		const int16_t *pIn = (int16_t *)pBuf;
+		float *pOut = (float *)pBuf;
+		for (int i = iSamples - 1; i >= 0; --i)
+		{
+			int16_t iSample = Swap16LE(pIn[i]);
+			pOut[i] = iSample / 32768.0f;
+		}
+	}
+
+	void ConvertLittleEndian24BitToFloat(void *pBuf, int iSamples)
+	{
+		/* Convert in reverse, so we can do it in-place. */
+		const unsigned char *pIn = (unsigned char *)pBuf;
+		float *pOut = (float *)pBuf;
+		pIn += iSamples * 3;
+		for (int i = iSamples - 1; i >= 0; --i)
+		{
+			pIn -= 3;
+
+			int32_t iSample =
+				(int(pIn[0]) << 0) |
+				(int(pIn[1]) << 8) |
+				(int(pIn[2]) << 16);
+
+			/* Sign-extend 24-bit to 32-bit: */
+			if (iSample & 0x800000)
+				iSample |= 0xFF000000;
+
+			pOut[i] = iSample / 8388608.0f;
+		}
+	}
+
+	void ConvertLittleEndian32BitToFloat(void *pBuf, int iSamples)
+	{
+		/* Convert in reverse, so we can do it in-place. */
+		const int32_t *pIn = (int32_t *)pBuf;
+		float *pOut = (float *)pBuf;
+		for (int i = iSamples - 1; i >= 0; --i)
+		{
+			int32_t iSample = Swap32LE(pIn[i]);
+			pOut[i] = iSample / 2147483648.0f;
+		}
+	}
+};
 
 newRageSoundReader_MP3::newRageSoundReader_MP3()
 {
@@ -73,7 +143,7 @@ RageSoundReader_FileReader::OpenResult newRageSoundReader_MP3::Open(RageFileBasi
 		0,                  // bWriteable (1=true,0=false) 
 		pFile,          // user data ; will be passed to our callback functions
 		ReadFunc,
-		0,                  // Write callback function (not used in this example) 
+		0,                  // Write callback function 
 		SeekFunc);
 
 	formatCtx = avcodec::avformat_alloc_context();
@@ -169,6 +239,7 @@ int newRageSoundReader_MP3::SetPosition(int iFrame)
 {
 	if (decodedFrame)
 		avcodec::av_frame_free(&decodedFrame);
+	aux = iFrame;
 	return avcodec::av_seek_frame(formatCtx, audioStream, (int64_t)iFrame, AVSEEK_FLAG_ANY);
 }
 
@@ -253,6 +324,22 @@ int newRageSoundReader_MP3::Read(float *pBuf, int iFrames)
 			};
 		samplesRead += WriteSamplesForAllChannels(buf + samplesRead*numChannels*dataSize, iFrames-samplesRead);
 	}
+	switch (dataSize)
+	{
+	case 1:
+		Convert8bitToFloat(buf, samplesRead*numChannels);
+		break;
+	case 2:
+		ConvertLittleEndian16BitToFloat(buf, samplesRead*numChannels);
+		break;
+	case 3:
+		ConvertLittleEndian24BitToFloat(buf, samplesRead*numChannels);
+		break;
+	case 4:
+		ConvertLittleEndian32BitToFloat(buf, samplesRead*numChannels);
+		/* otherwise 3; already a float */
+		break;
+	}
 	return samplesRead;
 }
 
@@ -280,6 +367,7 @@ int newRageSoundReader_MP3::WriteSamplesForAllChannels(void *pBuf, int samplesTo
 			samplesWritten++;
 		}
 	}
+	aux += samplesWritten;
 	return samplesWritten;
 
 }
@@ -358,6 +446,10 @@ int newRageSoundReader_MP3::WriteSamples(void *pBuf, int samplesToRead)
 
 }
 
+int newRageSoundReader_MP3::GetNextSourceFrame() const {
+	return aux+1;
+
+}
 //Return: -1 => Error already set. -2 => EOF. >=0 => bytesRead
 int newRageSoundReader_MP3::ReadAFrame()
 {
@@ -423,9 +515,4 @@ int newRageSoundReader_MP3::ReadAFrame()
 	}
 	av_free_packet(&avpkt);
 	return -2;
-}
-
-int newRageSoundReader_MP3::GetNextSourceFrame()
-{
-	return -1;
 }
