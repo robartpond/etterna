@@ -1,5 +1,6 @@
 <div class="Sidebar" markdown="1">
-* [Home](index.html)
+* [Lua Wiki](lua/index.html)
+* [C++ Wiki](cpp/index.html)
 * [FAQ](FAQ.html)
 * [Building Etterna](Building-Etterna.html)
 * [Playlists](Playlists.html)
