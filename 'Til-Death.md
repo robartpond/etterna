@@ -1,5 +1,3 @@
-{% include_relative _Sidebar.md %}
-<div class="Content" markdown="1">
 1. <a href="#what">What is 'Til Death?</a>
 1. <a href="#features">Features</a>
 1. <a href="#shortcuts">Unique Keyboard Shortcuts</a>
@@ -34,4 +32,3 @@ These shortcuts use the names given to the functions that can be set under Confi
 | ------------- | ------------- |
 | EffectUp or EffectDown  | Change the song rate in increments of 0.1.  |
 | Select + EffectUp or Select + EffectDown  | Change the song rate in increments of 0.05.  |
-</div>

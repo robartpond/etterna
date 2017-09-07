@@ -1,5 +1,3 @@
-{% include_relative _Sidebar.md %}
-<div class="Content" markdown="1">
 1. <a href="#what">What is a theme?</a>
 1. <a href="#smlua">Basic SM Lua</a>
 1. <a href="#metrics">metrics</a>
@@ -148,5 +146,3 @@ They also have a bunch of lua files, many of which are associated with a specifi
 You can change which screens lead where overriding branches in any /Scripts/ file.
 
 If you can't find something in your theme, it's probably in the _fallback theme, since that's where SM's engine looks for whatever it can't find in your theme, or in /Scripts/.
-
-</div>

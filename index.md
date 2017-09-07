@@ -1,6 +1,4 @@
-{% include_relative _Sidebar.md %}
 
-<div class="Content" markdown="1">
 ![](Install.ico)
 1. <a href="#what">What Is Etterna?</a>
 1. <a href="features">Features</a>
@@ -17,6 +15,3 @@ This wiki intends to do 3 things:
  1. Contain information for end users of Etterna
  1. Provide lua documentation for content creators
  1. Provide c++ documentation
-
-
-</div>

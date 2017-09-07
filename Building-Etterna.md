@@ -1,5 +1,4 @@
-{% include_relative _Sidebar.md %}
-<div class="Content" markdown="1">
+
 It should be noted how building Etterna on your own from the lastest commit is more likely to behave strangely(Resulting in crashes, profile wipes, etc). Do it at your own risk. It is recommended to use the installers or source files provided with every release.
 
 1. <a href="#windows">Windows</a>
@@ -141,4 +140,3 @@ Replacing master(twice) for the git branch you want to update to. Then build aga
 ##  Mac
 
 Mac is currently not supported.
-</div>

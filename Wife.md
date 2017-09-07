@@ -1,5 +1,3 @@
-{% include_relative _Sidebar.md %}
-<div class="Content" markdown="1">
 Wife is a rewrite of the existing Stepmania 5 scoring system as well as the score save/load system designed specifically for keyboard 4k play. The first aspect is a new scoring system. It is meant to be a more accurate replacement for the default DP scoring system, the  which has fairly significant flaws. The second aspect is a consistent recordkeeping system.
 
 ## The DP scoring system and its flaws
@@ -100,4 +98,3 @@ This only applies to scores attained after Wife is operating. Pre-existing score
 ### Other Links 
 
 [Spreadsheet showing the difference between Wife and DP.](https://docs.google.com/spreadsheets/d/15efgvF256nn1Z91djn-2e77kgMAq9sQy1DWfOA1DuKw/edit#gid=1537673854)
-</div>

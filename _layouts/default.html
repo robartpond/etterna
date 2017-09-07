@@ -1,0 +1,24 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>{{title}}</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://nickito12.github.io/etterna/css/style.css">
+</head>
+<body>
+
+<div class="container">
+	<div class="Sidebar" markdown="1">
+		{% capture sidebar %}{% include_relative _Sidebar.md %}{% endcapture %}
+		{{ sidebar | markdownify }}
+		
+	</div>
+
+	<div class="Content" markdown="1">
+		{{ content }}
+	</div>
+</div>
+
+</body>
+</html> 

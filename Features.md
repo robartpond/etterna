@@ -1,8 +1,3 @@
-{% include_relative _Sidebar.md %}
-
-<div class="Content" markdown="1">
-
-
 <a name="features" />
 
 ##  Etterna Features
@@ -23,5 +18,3 @@ Some features include:
 1. Improved song caching
 1. Disabling note cohesion
 1. Differential song reload(Only reload songs with changes)
-
-</div>

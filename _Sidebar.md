@@ -1,4 +1,3 @@
-<div class="Sidebar" markdown="1">
 * [Lua Wiki](lua/index.html)
 * [C++ Wiki](cpp/index.html)
 * [FAQ](FAQ.html)
@@ -8,6 +7,3 @@
 * [Wife](Wife.html)
 * [Theming](Theming.html)
 * [Chord Cohesion](Chord-Cohesion.html)
-
-
-</div>
