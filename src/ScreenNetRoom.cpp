@@ -295,6 +295,10 @@ public:
 		p->GetRoomWheel()->PushSelf(L);
 		return 1;
 	}
+	static int GetRoomWheel(T* p, lua_State *L) {
+		p->GetRoomWheel()->PushSelf(L);
+		return 1;
+	}
 	static int SelectCurrent(T* p, lua_State *L) {
 		p->SelectCurrent();
 		return 1;
@@ -307,6 +311,7 @@ public:
 	LunaScreenNetRoom()
 	{
 		ADD_METHOD(GetMusicWheel);
+		ADD_METHOD(GetRoomWheel);
 		ADD_METHOD(SelectCurrent);
 		ADD_METHOD(InfoSetVisible);
 	}
