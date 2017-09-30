@@ -120,6 +120,8 @@ sm_add_compile_definition("${SM_EXE_NAME}" $<$<CONFIG:RelWithDebInfo>:RELWITHDEB
 
 set(SM_COMPILE_FLAGS "")
 
+sm_add_compile_definition("${SM_EXE_NAME}" CURL_STATICLIB)
+
 if(WITH_SSE2)
   if(MSVC)
     set(SM_COMPILE_FLAGS "${SM_COMPILE_FLAGS} /arch:SSE2")
@@ -329,6 +331,7 @@ list(APPEND SMDATA_LINK_LIB
   "png"
   "glew"
   "jpeg"
+  "CURL"
 )
 include(../extern/CMakeProject-mmmagic.cmake)
 
@@ -513,6 +516,7 @@ target_link_libraries("${SM_EXE_NAME}" ${SMDATA_LINK_LIB})
 list(APPEND SM_INCLUDE_DIRS
   ${CMAKE_CURRENT_SOURCE_DIR}
   "${SM_SRC_DIR}/generated"
+  "${CURL_INCLUDE_DIR}"
 )
 if(NOT APPLE)
   list(APPEND SM_INCLUDE_DIRS
