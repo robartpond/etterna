@@ -40,7 +40,7 @@ struct SMLoader
 	 * @param song a reference to the song that may need cleaning up.
 	 * @param bFromCache a flag to determine if this song is loaded from a cache file.
 	 */
-	virtual void TidyUpData( Song &song, bool bFromCache );
+	static void TidyUpData( Song &song, bool bFromCache );
 
 	/**
 	 * @brief Retrieve the relevant notedata from the simfile.
