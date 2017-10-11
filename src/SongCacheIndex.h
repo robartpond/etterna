@@ -3,10 +3,18 @@
 
 #include "IniFile.h"
 
+#include <SQLiteCpp/SQLiteCpp.h>
+#include <SQLiteCpp/VariadicBind.h>
+
 class SongCacheIndex
 {
 	IniFile CacheIndex;
 	static RString MangleName( const RString &Name );
+
+	bool OpenDB();
+	void ResetDB();
+	bool dbempty;
+	SQLite::Database *db;
 
 public:
 	SongCacheIndex();
@@ -19,6 +27,9 @@ public:
 	void AddCacheIndex( const RString &path, unsigned hash );
 	unsigned GetCacheHash( const RString &path ) const;
 	bool delay_save_cache;
+
+	bool LoadSongFromCache(Song* song, string dir);
+	bool SaveSong(Song* song, string dir);
 };
 
 extern SongCacheIndex *SONGINDEX;	// global and accessible from anywhere in our program

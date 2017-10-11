@@ -20,6 +20,54 @@ enum SSCLoadingStates
 	NUM_SSCLoadingStates /**< The number of states used. */
 };
 
+// LoadNoteDataFromSimfile uses LoadNoteDataTagIDs because its parts operate
+// on state variables internal to the function.
+namespace SSC {
+	enum LoadNoteDataTagIDs
+	{
+		LNDID_version,
+		LNDID_stepstype,
+		LNDID_chartname,
+		LNDID_description,
+		LNDID_difficulty,
+		LNDID_meter,
+		LNDID_credit,
+		LNDID_notes,
+		LNDID_notes2,
+		LNDID_notedata
+	};
+
+	// LoadNoteDataFromSimfile uses LoadNoteDataTagIDs because its parts operate
+	// on state variables internal to the function.struct StepsTagInfo
+	struct StepsTagInfo
+	{
+		SSCLoader* loader;
+		Song* song;
+		Steps* steps;
+		TimingData* timing;
+		const MsdFile::value_t* params;
+		const RString& path;
+		bool has_own_timing;
+		bool ssc_format;
+		bool from_cache;
+		bool for_load_edit;
+		StepsTagInfo(SSCLoader* l, Song* s, const RString& p, bool fc)
+			:loader(l), song(s), path(p), has_own_timing(false), ssc_format(false),
+			from_cache(fc), for_load_edit(false)
+		{}
+	};
+	struct SongTagInfo
+	{
+		SSCLoader* loader;
+		Song* song;
+		const MsdFile::value_t* params;
+		const RString& path;
+		bool from_cache;
+		SongTagInfo(SSCLoader* l, Song* s, const RString& p, bool fc)
+			:loader(l), song(s), path(p), from_cache(fc)
+		{}
+	};
+}
 /** @brief The version where fakes started to be used as a radar category. */
 const float VERSION_RADAR_FAKE = 0.53f;
 /** @brief The version where WarpSegments started to be utilized. */
