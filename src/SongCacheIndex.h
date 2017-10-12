@@ -16,7 +16,8 @@ class SongCacheIndex
 
 	bool OpenDB();
 	void ResetDB();
-	bool dbempty;
+	void DeleteDB();
+	bool DBEmpty;
 	SQLite::Database *db;
 
 public:
@@ -31,7 +32,7 @@ public:
 	unsigned GetCacheHash( const RString &path ) const;
 	bool delay_save_cache;
 	
-	int InsertTimingData(TimingData timing);
+	int InsertStepsTimingData(TimingData timing);
 	int InsertSteps(const Steps* pSteps, int songID);
 	bool LoadSongFromCache(Song* song, string dir);
 	bool SaveSong(Song& song, string dir);
