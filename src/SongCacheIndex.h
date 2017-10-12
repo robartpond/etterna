@@ -2,6 +2,9 @@
 #define SONG_CACHE_INDEX_H
 
 #include "IniFile.h"
+#include "TimingData.h"
+#include "Song.h"
+#include "Steps.h"
 
 #include <SQLiteCpp/SQLiteCpp.h>
 #include <SQLiteCpp/VariadicBind.h>
@@ -27,9 +30,11 @@ public:
 	void AddCacheIndex( const RString &path, unsigned hash );
 	unsigned GetCacheHash( const RString &path ) const;
 	bool delay_save_cache;
-
+	
+	int InsertTimingData(TimingData timing);
+	int InsertSteps(const Steps* pSteps, int songID);
 	bool LoadSongFromCache(Song* song, string dir);
-	bool SaveSong(Song* song, string dir);
+	bool SaveSong(Song& song, string dir);
 };
 
 extern SongCacheIndex *SONGINDEX;	// global and accessible from anywhere in our program
