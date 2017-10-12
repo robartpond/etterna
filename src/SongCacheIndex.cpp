@@ -32,6 +32,7 @@
  * in order to find the cache file.
  */
 const string CACHE_INDEX = SpecialFiles::CACHE_DIR + "index.cache";
+const string CACHE_DB = SpecialFiles::CACHE_DIR + "cache.db";
 
 
 SongCacheIndex *SONGINDEX; // global and accessible from anywhere in our program
@@ -63,12 +64,11 @@ RString SongCacheIndex::GetCacheFilePath( const RString &sGroup, const RString &
 SongCacheIndex::SongCacheIndex()
 {
 	ReadCacheIndex();
-	dbempty = !OpenDB();
+	DBEmpty = !OpenDB();
 }
 
-int SongCacheIndex::InsertTimingData(TimingData timing)
+int SongCacheIndex::InsertStepsTimingData(TimingData timing)
 {
-
 	SQLite::Statement insertTimingData(*db, "INSERT INTO timingdatas VALUES (NULL, "
 		"OFFSET=?, BPMS=?, STOPS=?, "
 		"DELAYS=?, WARPS=?, TIMESIGNATURESEGMENT=?, TICKCOUNTS=?, "
@@ -218,6 +218,7 @@ int SongCacheIndex::InsertTimingData(TimingData timing)
 	insertTimingData.exec();
 	return sqlite3_last_insert_rowid(db->getHandle());
 }
+
 int SongCacheIndex::InsertSteps(const Steps* pSteps, int songID)
 {
 	SQLite::Statement insertSteps(*db, "INSERT INTO steps VALUES (NULL, "
@@ -251,7 +252,7 @@ int SongCacheIndex::InsertSteps(const Steps* pSteps, int songID)
 		insertSteps.bind(stepsIndex++);
 	}
 	else {
-		int timingDataID = InsertTimingData(pSteps->m_Timing);
+		int timingDataID = InsertStepsTimingData(pSteps->m_Timing);
 		insertSteps.bind(stepsIndex++, timingDataID);
 	}
 
@@ -280,6 +281,7 @@ int SongCacheIndex::InsertSteps(const Steps* pSteps, int songID)
 	}
 	insertSteps.bind(stepsIndex++, pSteps->GetFilename().c_str());
 	insertSteps.bind(stepsIndex++, songID);
+	insertSteps.exec();
 	return sqlite3_last_insert_rowid(db->getHandle());
 }
 /*	Save a song to the cache db*/
@@ -319,31 +321,25 @@ bool SongCacheIndex::SaveSong(Song& song, string dir)
 	insertSong.bind(index++, song.m_sCDTitleFile);
 	insertSong.bind(index++, song.m_sMusicFile);
 	insertSong.bind(index++, song.m_PreviewFile);
+	auto vs = song.GetInstrumentTracksToVectorString();
+	if (!vs.empty())
 	{
-		auto vs = song.GetInstrumentTracksToVectorString();
-		if (!vs.empty())
-		{
-			std::string s = join(",", vs);
-			insertSong.bind(index++, s);
-		}
-		else {
-			insertSong.bind(index++);
-		}
+		std::string s = join(",", vs);
+		insertSong.bind(index++, s);
+	}
+	else {
+		insertSong.bind(index++);
 	}
 	insertSong.bind(index++, song.m_SongTiming.m_fBeat0OffsetInSeconds);
 	insertSong.bind(index++, song.m_fMusicSampleStartSeconds);
 	insertSong.bind(index++, song.m_fMusicSampleLengthSeconds);
-
-	//f.Write("#SELECTABLE:");
 	//Selectable should be stored as int
 	switch (song.m_SelectionDisplay)
 	{
 	default: ASSERT_M(0, "An invalid selectable value was found for this song!"); // fall through
 	case Song::SHOW_ALWAYS:	insertSong.bind(index++, "YES");		break;
-		//case Song::SHOW_NONSTOP:	f.Write( "NONSTOP" );	break;
 	case Song::SHOW_NEVER:		insertSong.bind(index++, "NO");		break;
 	}
-
 	//find a better way to store bpm
 	switch (song.m_DisplayBPMType)
 	{
@@ -367,8 +363,6 @@ bool SongCacheIndex::SaveSong(Song& song, string dir)
 		insertSong.bind(index++);
 		break;
 	}
-
-
 	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_BPM, 3)));
 	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_STOP, 3)));
 	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_DELAY, 3)));
@@ -376,12 +370,10 @@ bool SongCacheIndex::SaveSong(Song& song, string dir)
 	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_TIME_SIG, 3)));
 	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_TICKCOUNT, 3)));
 	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_COMBO, 3)));
-
 	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_SPEED, 3)));
 	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_SCROLL, 3)));
 	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_FAKE, 3)));
 	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_LABEL, 3)));
-
 	if (song.GetSpecifiedLastSecond() > 0)
 	{
 		insertSong.bind(index++, song.GetSpecifiedLastSecond());
@@ -389,7 +381,7 @@ bool SongCacheIndex::SaveSong(Song& song, string dir)
 	else {
 		insertSong.bind(index++);
 	}
-	/*
+	/* Theres only 2 background layers
 	// @brief The different background layers available. 
 	enum BackgroundLayer
 	{
@@ -436,32 +428,21 @@ bool SongCacheIndex::SaveSong(Song& song, string dir)
 		insertSong.bind(index++);
 	}
 
-	if (!song.m_vsKeysoundFile.empty())
-	{
+	if (!song.m_vsKeysoundFile.empty()) {
 		for (unsigned i = 0; i < song.m_vsKeysoundFile.size(); i++)
 		{
-			// some keysound files has the first sound that starts with #,
-			// which makes MsdFile fail parsing the whole declaration.
-			// in this case, add a backslash at the front
-			// (#KEYSOUNDS:\#bgm.wav,01.wav,02.wav,..) and handle that on load.
 			if (i == 0 && song.m_vsKeysoundFile[i].size() > 0 && song.m_vsKeysoundFile[i][0] == '#')
 			{
-				//f.Write("\\");
 				insertSong.bind(index++, song.m_vsKeysoundFile[i].substr(1, song.m_vsKeysoundFile[i].size()-1));
 			}
 			else {
 				insertSong.bind(index++, song.m_vsKeysoundFile[i]);
 			}
-			//f.Write(song.m_vsKeysoundFile[i]);
-
 		}
 	}
 	else {
 		insertSong.bind(index++);
 	}
-
-
-
 	insertSong.bind(index++, song.GetFirstSecond());
 	insertSong.bind(index++, song.GetLastSecond());
 	insertSong.bind(index++, song.m_sSongFileName.c_str());
@@ -482,6 +463,166 @@ bool SongCacheIndex::SaveSong(Song& song, string dir)
 	}
 	return true;
 }
+
+/*	Reset the DB/
+Must be open already	*/
+void SongCacheIndex::DeleteDB()
+{
+	if (db == nullptr)
+		return;
+	SQLite::Statement   qTables(*db, "SELECT name FROM sqlite_master WHERE type='table'");
+	qTables.exec();
+	while (qTables.executeStep())
+	{
+		string table = static_cast<const char*>(qTables.getColumn(0));
+		db->exec("DROP TABLE IF EXISTS  " + table);
+	}
+	LOG->Trace("Cache database is out of date.  Deleting all cache files.");
+	db->exec("VACUUM"); //Shrink to fit
+}
+void SongCacheIndex::ResetDB()
+{
+	ResetDB();
+	db->exec("CREATE TABLE IF NOT EXISTS dbinfo (ID INTEGER PRIMARY KEY, "
+		"VERSION INTEGER)");
+	db->exec("CREATE TABLE IF NOT EXISTS timingdatas (ID INTEGER PRIMARY KEY, "
+		"OFFSET TEXT, BPMS TEXT, STOPS TEXT, "
+		"DELAYS TEXT, WARPS TEXT, TIMESIGNATURESEGMENT TEXT, TICKCOUNTS TEXT, "
+		"COMBOS TEXT, SPEEDS TEXT, SCROLLS TEXT, FAKES TEXT, LABELS TEXT)");
+	db->exec("CREATE TABLE IF NOT EXISTS songs (ID INTEGER PRIMARY KEY, "
+		"VERSION TEXT, TITLE TEXT, SUBTITLE TEXT, ARTIST TEXT, TITLETRANSLIT TEXT, "
+		"SUBTITLETRANSLIT TEXT, ARTISTTRANSLIT TEXT, GENRE TEXT, "
+		"ORIGIN TEXT, CREDIT TEXT, BANNER TEXT, BACKGROUND TEXT, "
+		"PREVIEWVID TEXT, JACKET TEXT, CDIMAGE TEXT, DISCIMAGE TEXT, "
+		"LYRICSPATH TEXT, CDTITLE TEXT, MUSIC TEXT, PREVIEW TEXT, INSTRUMENTTRACK TEXT, "
+		"OFFSET FLOAT, SAMPLESTART FLOAT, SAMPLELENGTH FLOAT, SELECTABLE TEXT, "
+		"DISPLAYBPM TEXT, BPMS TEXT, STOPS TEXT, DELAYS TEXT, WARPS TEXT, "
+		"TIMESIGNATURES TEXT, TICKCOUNTS TEXT, COMBOS TEXT, SPEEDS TEXT, "
+		"SCROLLS TEXT, FAKES TEXT, LABELS TEXT, LASTSECONDHINT FLOAT, "
+		"BGCHANGESLAYER1 TEXT, BGCHANGESLAYER2 TEXT, FGCHANGES TEXT, "
+		"KEYSOUNDS TEXT, FIRSTSECOND FLOAT, LASTSECOND FLOAT, "
+		"SONGFILENAME TEXT, HASMUSIC TEXT, HASBANNER TEXT, MUSICLENGTH FLOAT)");
+	db->exec("CREATE TABLE IF NOT EXISTS steps (id INTEGER PRIMARY KEY, "
+		"CHARTNAME TEXT, STEPSTYPE TEXT, DESCRIPTION TEXT, CHARTSTYLE TEXT, DIFFICULTY TEXT, "
+		"METER TEXT, MSDVALUES TEXT, CHARTKEY TEXT, MUSIC TEXT, RADARVALUES TEXT, CREDIT TEXT, "
+		"TIMINGDATAID TEXT, DISPLAYBPM TEXT, STEPFILENAME TEXT, SONGID INTEGER, "
+		"CONSTRAINT fk_songid FOREIGN KEY (SONGID) REFERENCES songs(id), "
+		"CONSTRAINT fk_timingdataid FOREIGN KEY (TIMINGDATAID) REFERENCES songs(ID))");
+}
+/*	Returns weather or not the db had valid data*/
+bool SongCacheIndex::OpenDB()
+{
+	bool ret = IsAFile(CACHE_DB);
+	//Try to open ane existing db
+	try {
+		db = new SQLite::Database(FILEMAN->ResolvePath(CACHE_INDEX), SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
+		if (!ret) {
+			ResetDB();
+			return false;
+		}
+		SQLite::Statement   qDBInfo(*db, "SELECT * FROM dbinfo");
+
+		//Should only have one row so no executeStep loop
+		if (!qDBInfo.executeStep()) {
+			ResetDB();
+			return false;
+		}
+		int iCacheVersion = -1;
+		iCacheVersion = qDBInfo.getColumn(0);
+		if (iCacheVersion == FILE_CACHE_VERSION)
+			return true;
+		ResetDB();
+	}
+	catch (std::exception& e)
+	{
+		LOG->Trace("Error reading cache db: %s", e.what());
+		db = nullptr;
+		return false;
+	}
+	return false;
+}
+
+SongCacheIndex::~SongCacheIndex()
+= default;
+
+void SongCacheIndex::ReadFromDisk()
+{
+	ReadCacheIndex();
+}
+
+static void EmptyDir(RString dir)
+{
+	ASSERT(dir[dir.size() - 1] == '/');
+
+	vector<RString> asCacheFileNames;
+	GetDirListing(dir, asCacheFileNames);
+	for (unsigned i = 0; i<asCacheFileNames.size(); i++)
+	{
+		if (!IsADirectory(dir + asCacheFileNames[i]))
+			FILEMAN->Remove(dir + asCacheFileNames[i]);
+	}
+}
+
+void SongCacheIndex::ReadCacheIndex()
+{
+	CacheIndex.ReadFile(CACHE_INDEX);	// don't care if this fails
+
+	int iCacheVersion = -1;
+	CacheIndex.GetValue("Cache", "CacheVersion", iCacheVersion);
+	if (iCacheVersion == FILE_CACHE_VERSION)
+		return; // OK
+
+	LOG->Trace("Cache format is out of date.  Deleting all cache files.");
+	EmptyDir(SpecialFiles::CACHE_DIR);
+	EmptyDir(SpecialFiles::CACHE_DIR + "Banners/");
+	//EmptyDir( SpecialFiles::CACHE_DIR+"Backgrounds/" );
+	EmptyDir(SpecialFiles::CACHE_DIR + "Songs/");
+	EmptyDir(SpecialFiles::CACHE_DIR + "Courses/");
+
+	CacheIndex.Clear();
+	/* This is right now in place because our song file paths are apparently being
+	* cached in two distinct areas, and songs were loading from paths in FILEMAN.
+	* This is admittedly a hack for now, but this does bring up a good question on
+	* whether we really need a dedicated cache for future versions of StepMania.
+	*/
+	FILEMAN->FlushDirCache();
+}
+
+void SongCacheIndex::SaveCacheIndex()
+{
+	CacheIndex.WriteFile(CACHE_INDEX);
+}
+
+void SongCacheIndex::AddCacheIndex(const RString &path, unsigned hash)
+{
+	if (hash == 0)
+		++hash; /* no 0 hash values */
+	CacheIndex.SetValue("Cache", "CacheVersion", FILE_CACHE_VERSION);
+	CacheIndex.SetValue("Cache", MangleName(path), hash);
+	if (!delay_save_cache)
+	{
+		CacheIndex.WriteFile(CACHE_INDEX);
+	}
+}
+
+unsigned SongCacheIndex::GetCacheHash(const RString &path) const
+{
+	unsigned iDirHash = 0;
+	if (!CacheIndex.GetValue("Cache", MangleName(path), iDirHash))
+		return 0;
+	if (iDirHash == 0)
+		++iDirHash; /* no 0 hash values */
+	return iDirHash;
+}
+
+RString SongCacheIndex::MangleName(const RString &Name)
+{
+	/* We store paths in an INI.  We can't store '='. */
+	RString ret = Name;
+	ret.Replace("=", "");
+	return ret;
+}
+
 /*	Load a song from Cache DB
 	Returns true if it was loaded**/
 bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
@@ -782,137 +923,6 @@ bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
 		// to hit the song folder to find the files that weren't found. -Kyz
 		song->TidyUpData(false, false);
 	}
-}
-
-/*	Reset the DB/
-	Must be open already	*/
-void SongCacheIndex::ResetDB()
-{
-	if (db == nullptr)
-		return;
-	SQLite::Statement   qTables(*db, "SELECT name FROM sqlite_master WHERE type='table'");
-	qTables.exec();
-	while (qTables.executeStep())
-	{
-		string table = static_cast<const char*>(qTables.getColumn(0));
-		db->exec("DROP TABLE IF EXISTS  " + table);
-	}
-	LOG->Trace("Cache database is out of date.  Deleting all cache files.");
-	db->exec("VACUUM"); //Shrink to fit
-}
-
-/*	Returns weather or not the db has valid data*/
-bool SongCacheIndex::OpenDB()
-{
-	//Try to open ane existing db
-	try {
-		db = new SQLite::Database(FILEMAN->ResolvePath(CACHE_INDEX), SQLite::OPEN_READWRITE);
-		SQLite::Statement   qDBInfo(*db, "SELECT * FROM dbinfo");
-
-		//Should only have one row so no executeStep loop
-		if (!qDBInfo.executeStep()) {
-			ResetDB();
-			return false;
-		}
-		int iCacheVersion = -1;
-		iCacheVersion = qDBInfo.getColumn(0);
-		if (iCacheVersion == FILE_CACHE_VERSION)
-			return true; // OK
-		ResetDB();
-	}
-	catch (std::exception& e)
-	{
-		try {
-			// Open a database file
-			db = new SQLite::Database(FILEMAN->ResolvePath(CACHE_INDEX), SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-		}
-		catch (std::exception& e)
-		{
-			db = nullptr;
-		}
-	}
-	return false;
-}
-
-SongCacheIndex::~SongCacheIndex()
-= default;
-
-void SongCacheIndex::ReadFromDisk()
-{
-	ReadCacheIndex();
-}
-
-static void EmptyDir( RString dir )
-{
-	ASSERT(dir[dir.size()-1] == '/');
-
-	vector<RString> asCacheFileNames;
-	GetDirListing( dir, asCacheFileNames );
-	for( unsigned i=0; i<asCacheFileNames.size(); i++ )
-	{
-		if( !IsADirectory(dir + asCacheFileNames[i]) )
-			FILEMAN->Remove( dir + asCacheFileNames[i] );
-	}
-}
-
-void SongCacheIndex::ReadCacheIndex()
-{
-	CacheIndex.ReadFile( CACHE_INDEX );	// don't care if this fails
-
-	int iCacheVersion = -1;
-	CacheIndex.GetValue( "Cache", "CacheVersion", iCacheVersion );
-	if( iCacheVersion == FILE_CACHE_VERSION )
-		return; // OK
-
-	LOG->Trace( "Cache format is out of date.  Deleting all cache files." );
-	EmptyDir( SpecialFiles::CACHE_DIR );
-	EmptyDir( SpecialFiles::CACHE_DIR+"Banners/" );
-	//EmptyDir( SpecialFiles::CACHE_DIR+"Backgrounds/" );
-	EmptyDir( SpecialFiles::CACHE_DIR+"Songs/" );
-	EmptyDir( SpecialFiles::CACHE_DIR+"Courses/" );
-
-	CacheIndex.Clear();
-	/* This is right now in place because our song file paths are apparently being
-	 * cached in two distinct areas, and songs were loading from paths in FILEMAN.
-	 * This is admittedly a hack for now, but this does bring up a good question on
-	 * whether we really need a dedicated cache for future versions of StepMania.
-	 */
-	FILEMAN->FlushDirCache();
-}
-
-void SongCacheIndex::SaveCacheIndex()
-{
-	CacheIndex.WriteFile(CACHE_INDEX);
-}
-
-void SongCacheIndex::AddCacheIndex(const RString &path, unsigned hash)
-{
-	if( hash == 0 )
-		++hash; /* no 0 hash values */
-	CacheIndex.SetValue( "Cache", "CacheVersion", FILE_CACHE_VERSION );
-	CacheIndex.SetValue( "Cache", MangleName(path), hash );
-	if(!delay_save_cache)
-	{
-		CacheIndex.WriteFile(CACHE_INDEX);
-	}
-}
-
-unsigned SongCacheIndex::GetCacheHash( const RString &path ) const
-{
-	unsigned iDirHash = 0;
-	if( !CacheIndex.GetValue( "Cache", MangleName(path), iDirHash ) )
-		return 0;
-	if( iDirHash == 0 )
-		++iDirHash; /* no 0 hash values */
-	return iDirHash;
-}
-
-RString SongCacheIndex::MangleName( const RString &Name )
-{
-	/* We store paths in an INI.  We can't store '='. */
-	RString ret = Name;
-	ret.Replace( "=", "");
-	return ret;
 }
 
 /*
