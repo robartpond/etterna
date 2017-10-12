@@ -1124,26 +1124,34 @@ bool Song::SaveToSMFile()
 	if( IsAFile(sPath) )
 		FileCopy( sPath, sPath + ".old" );
 
+	vector<Steps*> vpStepsToSave = GetStepsToSave();
+
+
+	return NotesWriterSM::Write( sPath, *this, vpStepsToSave );
+
+}
+vector<Steps*> Song::GetStepsToSave(bool bSavingCache=true, string path="")
+{
+
 	vector<Steps*> vpStepsToSave;
-	FOREACH_CONST( Steps*, m_vpSteps, s )
+	FOREACH_CONST(Steps*, m_vpSteps, s)
 	{
 		Steps *pSteps = *s;
 
 		// Only save steps that weren't loaded from a profile.
-		if( pSteps->WasLoadedFromProfile() )
+		if (pSteps->WasLoadedFromProfile())
 			continue;
 
-		vpStepsToSave.push_back( pSteps );
+		if (!bSavingCache)
+			pSteps->SetFilename(path);
+		vpStepsToSave.push_back(pSteps);
 	}
 	FOREACH_CONST(Steps*, m_UnknownStyleSteps, s)
 	{
 		vpStepsToSave.push_back(*s);
 	}
-
-	return NotesWriterSM::Write( sPath, *this, vpStepsToSave );
-
+	return vpStepsToSave;
 }
-
 bool Song::SaveToSSCFile( const RString &sPath, bool bSavingCache, bool autosave )
 {
 	RString path = sPath;
@@ -1160,23 +1168,8 @@ bool Song::SaveToSSCFile( const RString &sPath, bool bSavingCache, bool autosave
 	if(!bSavingCache && !autosave && IsAFile(path))
 		FileCopy( path, path + ".old" );
 
-	vector<Steps*> vpStepsToSave;
-	FOREACH_CONST( Steps*, m_vpSteps, s )
-	{
-		Steps *pSteps = *s;
+	vector<Steps*> vpStepsToSave= GetStepsToSave(bSavingCache, path);
 
-		// Only save steps that weren't loaded from a profile.
-		if( pSteps->WasLoadedFromProfile() )
-			continue;
-
-		if (!bSavingCache)
-			pSteps->SetFilename(path);
-		vpStepsToSave.push_back( pSteps );
-	}
-	FOREACH_CONST(Steps*, m_UnknownStyleSteps, s)
-	{
-		vpStepsToSave.push_back(*s);
-	}
 
 	if(bSavingCache || autosave)
 	{
@@ -1301,7 +1294,7 @@ bool Song::SaveToCacheFile()
 	{
 		return true;
 	}
-	return SONGINDEX->SaveSong(this, m_sSongDir);
+	return SONGINDEX->SaveSong(*this, m_sSongDir);
 	SONGINDEX->AddCacheIndex(m_sSongDir, GetHashForDirectory(m_sSongDir));
 	const RString sPath = GetCacheFilePath();
 	return SaveToSSCFile(sPath, true);

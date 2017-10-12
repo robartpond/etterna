@@ -8,9 +8,11 @@
 #include "SpecialFiles.h"
 #include "Steps.h"
 #include "NotesLoaderSSC.h"
+#include "NotesWriterSSC.h"
 
 #include <SQLiteCpp/SQLiteCpp.h>
 #include <SQLiteCpp/VariadicBind.h>
+#include "sqlite3.h"
 
 /*
  * A quick explanation of song cache hashes: Each song has two hashes; a hash of the
@@ -64,6 +66,422 @@ SongCacheIndex::SongCacheIndex()
 	dbempty = !OpenDB();
 }
 
+int SongCacheIndex::InsertTimingData(TimingData timing)
+{
+
+	SQLite::Statement insertTimingData(*db, "INSERT INTO timingdatas VALUES (NULL, "
+		"OFFSET=?, BPMS=?, STOPS=?, "
+		"DELAYS=?, WARPS=?, TIMESIGNATURESEGMENT=?, TICKCOUNTS=?, "
+		"COMBOS=?, SPEEDS=?, SCROLLS=?, FAKES=?, LABELS=?)");
+	unsigned int timingDataIndex = 0;
+	insertTimingData.bind(timingDataIndex++, timing.m_fBeat0OffsetInSeconds);
+	{
+		vector<TimingSegment*> const& segs = timing.GetTimingSegments(SEGMENT_BPM);
+		string bpms = "";
+		if (!segs.empty())
+		{
+			for (auto&& seg : segs)
+			{
+				const  BPMSegment* segment = ToBPM(seg);
+				bpms.append(ssprintf("%.6f=%.6f", NoteRowToBeat(segment->GetRow()), segment->GetBPM()));
+			}
+		}
+		insertTimingData.bind(timingDataIndex++, bpms);
+	}
+	{
+		vector<TimingSegment*> const& segs = timing.GetTimingSegments(SEGMENT_STOP);
+		string stops = "";
+		if (!segs.empty())
+		{
+			for (auto&& seg : segs)
+			{
+				const  StopSegment* segment = ToStop(seg);
+				stops.append(ssprintf("%.6f=%.6f", NoteRowToBeat(segment->GetRow()), segment->GetPause()));
+			}
+		}
+		insertTimingData.bind(timingDataIndex++, stops);
+	}
+	{
+		vector<TimingSegment*> const& segs = timing.GetTimingSegments(SEGMENT_DELAY);
+		string delays = "";
+		if (!segs.empty())
+		{
+			for (auto&& seg : segs)
+			{
+				const  DelaySegment* segment = ToDelay(seg);
+				delays.append(ssprintf("%.6f=%.6f", NoteRowToBeat(segment->GetRow()), segment->GetPause()));
+			}
+		}
+		insertTimingData.bind(timingDataIndex++, delays);
+	}
+	{
+		vector<TimingSegment*> const& segs = timing.GetTimingSegments(SEGMENT_WARP);
+		string warps = "";
+		if (!segs.empty())
+		{
+			for (auto&& seg : segs)
+			{
+				const  WarpSegment* segment = ToWarp(seg);
+				warps.append(ssprintf("%.6f=%.6f", NoteRowToBeat(segment->GetRow()), segment->GetLength()));
+			}
+		}
+		insertTimingData.bind(timingDataIndex++, warps);
+	}
+	{
+		vector<TimingSegment*> const& segs = timing.GetTimingSegments(SEGMENT_TIME_SIG);
+		string timesigs = "";
+		if (!segs.empty())
+		{
+			for (auto&& seg : segs)
+			{
+				const  TimeSignatureSegment* segment = ToTimeSignature(seg);
+				timesigs.append(ssprintf("%.6f=%d=%d", NoteRowToBeat(segment->GetRow()), segment->GetNum(), segment->GetDen()));
+			}
+		}
+		insertTimingData.bind(timingDataIndex++, timesigs);
+	}
+	{
+		vector<TimingSegment*> const& segs = timing.GetTimingSegments(SEGMENT_TICKCOUNT);
+		string ticks = "";
+		if (!segs.empty())
+		{
+			for (auto&& seg : segs)
+			{
+				const  TickcountSegment* segment = ToTickcount(seg);
+				ticks.append(ssprintf("%.6f=%d", NoteRowToBeat(segment->GetRow()), segment->GetTicks()));
+			}
+		}
+		insertTimingData.bind(timingDataIndex++, ticks);
+	}
+	{
+		vector<TimingSegment*> const& segs = timing.GetTimingSegments(SEGMENT_COMBO);
+		string combos = "";
+		if (!segs.empty())
+		{
+			for (auto&& seg : segs)
+			{
+				const  ComboSegment* segment = ToCombo(seg);
+				if (segment->GetCombo() == segment->GetMissCombo())
+				{
+					combos.append(ssprintf("%.6f=%d", NoteRowToBeat(segment->GetRow()), segment->GetCombo()));
+				}
+				else
+				{
+					combos.append(ssprintf("%.6f=%d=%d", NoteRowToBeat(segment->GetRow()), segment->GetCombo(), segment->GetMissCombo()));
+				}
+			}
+		}
+		insertTimingData.bind(timingDataIndex++, combos);
+	}
+	{
+		vector<TimingSegment*> const& segs = timing.GetTimingSegments(SEGMENT_SPEED);
+		string speeds = "";
+		if (!segs.empty())
+		{
+			for (auto&& seg : segs)
+			{
+				const  SpeedSegment* segment = ToSpeed(seg);
+				speeds.append(ssprintf("%.6f=%.6f=%.6f=%hd", NoteRowToBeat(segment->GetRow()), segment->GetRatio(), segment->GetDelay(), segment->GetUnit()));
+			}
+		}
+		insertTimingData.bind(timingDataIndex++, speeds);
+	}
+	{
+		vector<TimingSegment*> const& segs = timing.GetTimingSegments(SEGMENT_SCROLL);
+		string scrolls = "";
+		if (!segs.empty())
+		{
+			for (auto&& seg : segs)
+			{
+				const  ScrollSegment* segment = ToScroll(seg);
+				scrolls.append(ssprintf("%.6f=%.6f", NoteRowToBeat(segment->GetRow()), segment->GetRatio()));
+			}
+		}
+		insertTimingData.bind(timingDataIndex++, scrolls);
+	}
+	{
+		vector<TimingSegment*> const& segs = timing.GetTimingSegments(SEGMENT_LABEL);
+		string labels = "";
+		if (!segs.empty())
+		{
+			for (auto&& seg : segs)
+			{
+				const  LabelSegment* segment = ToLabel(seg);
+				if (!segment->GetLabel().empty())
+				{
+					labels.append(ssprintf("%.6f=%s", NoteRowToBeat(segment->GetRow()), segment->GetLabel()));
+				}
+			}
+		}
+		insertTimingData.bind(timingDataIndex++, labels);
+	}
+	insertTimingData.exec();
+	return sqlite3_last_insert_rowid(db->getHandle());
+}
+int SongCacheIndex::InsertSteps(const Steps* pSteps, int songID)
+{
+	SQLite::Statement insertSteps(*db, "INSERT INTO steps VALUES (NULL, "
+		"CHARTNAME=?, STEPSTYPE=?, DESCRIPTION=?, CHARTSTYLE=?, DIFFICULTY=?, "
+		"METER=?, MSDVALUES=?, CHARTKEY=?, MUSIC=?, RADARVALUES=?, CREDIT=?, "
+		"TIMINGDATAID=?, DISPLAYBPM=?, STEPFILENAME=?, SONGID=?)");
+	vector<RString> lines;
+	int stepsIndex = 0;
+	insertSteps.bind(stepsIndex++, pSteps->GetChartName());
+	insertSteps.bind(stepsIndex++, pSteps->m_StepsTypeStr);
+	insertSteps.bind(stepsIndex++, pSteps->GetDescription());
+	insertSteps.bind(stepsIndex++, pSteps->GetChartStyle());
+	insertSteps.bind(stepsIndex++, DifficultyToString(pSteps->GetDifficulty()));
+	insertSteps.bind(stepsIndex++, pSteps->GetMeter());
+	insertSteps.bind(stepsIndex++, NotesWriterSSC::MSDToString(pSteps->GetAllMSD()).c_str());//msdvalues
+	insertSteps.bind(stepsIndex++, SmEscape(pSteps->GetChartKey()).c_str());//chartkey
+
+	insertSteps.bind(stepsIndex++, pSteps->GetMusicFile());//musicfile
+
+	vector<RString> asRadarValues;
+	const RadarValues &rv = pSteps->GetRadarValues();
+	FOREACH_ENUM(RadarCategory, rc)
+		asRadarValues.emplace_back(ssprintf("%i", rv[rc]));
+	insertSteps.bind(stepsIndex++, join(",", asRadarValues).c_str());
+
+	insertSteps.bind(stepsIndex++, pSteps->GetCredit());
+
+	// If the Steps TimingData is not empty, then they have their own
+	// timing.  Write out the corresponding tags.
+	if (pSteps->m_Timing.empty()) {
+		insertSteps.bind(stepsIndex++);
+	}
+	else {
+		int timingDataID = InsertTimingData(pSteps->m_Timing);
+		insertSteps.bind(stepsIndex++, timingDataID);
+	}
+
+	switch (pSteps->GetDisplayBPM())
+	{
+	case DISPLAY_BPM_ACTUAL:
+		insertSteps.bind(stepsIndex++);
+		// write nothing
+		break;
+	case DISPLAY_BPM_SPECIFIED:
+	{
+		float small = pSteps->GetMinBPM();
+		float big = pSteps->GetMaxBPM();
+		if (small == big)
+			insertSteps.bind(stepsIndex++, ssprintf("%.6f;", small));
+		else
+			insertSteps.bind(stepsIndex++, ssprintf("%.6f:%.6f;", small, big));
+		break;
+	}
+	case DISPLAY_BPM_RANDOM:
+		insertSteps.bind(stepsIndex++, "*");
+		break;
+	default:
+		insertSteps.bind(stepsIndex++);
+		break;
+	}
+	insertSteps.bind(stepsIndex++, pSteps->GetFilename().c_str());
+	insertSteps.bind(stepsIndex++, songID);
+	return sqlite3_last_insert_rowid(db->getHandle());
+}
+/*	Save a song to the cache db*/
+bool SongCacheIndex::SaveSong(Song& song, string dir)
+{
+	SQLite::Statement insertSong(*db, "INSERT INTO songs VALUES (NULL, "
+		"VERSION=?, TITLE=?, SUBTITLE=?, ARTIST=?, TITLETRANSLIT=?, "
+		"SUBTITLETRANSLIT=?, ARTISTTRANSLIT=?, GENRE=?, "
+		"ORIGIN=?, CREDIT=?, BANNER=?, BACKGROUND:=?"
+		"PREVIEWVID=?, JACKET=?, CDIMAGE=?, DISCIMAGE=?, "
+		"LYRICSPATH, CDTITLE=?, MUSIC=?, PREVIEW=?, INSTRUMENTTRACK=?, "
+		"OFFSET=?, SAMPLESTART=?, SAMPLELENGTH=?, SELECTABLE=?, "
+		"DISPLAYBPM=?, BPMS=?, STOPS=?, DELAYS=?, WARPS=?, "
+		"TIMESIGNATURES=?, TICKCOUNTS=?, COMBOS=?, SPEEDS=?, "
+		"SCROLLS=?, FAKES=?, LABELS=?, LASTSECONDHINT=?, "
+		"BGCHANGESLAYER1=?, BGCHANGESLAYER2=?, FGCHANGES=?, "
+		"KEYSOUNDS=?, FIRSTSECOND=?, LASTSECOND=?, "
+		"SONGFILENAME=?, HASMUSIC=?, HASBANNER=?, MUSICLENGTH=?)");
+	unsigned int index = 0;
+	insertSong.bind(index++, STEPFILE_VERSION_NUMBER);
+	insertSong.bind(index++, song.m_sMainTitle);
+	insertSong.bind(index++, song.m_sSubTitle);
+	insertSong.bind(index++, song.m_sArtist);
+	insertSong.bind(index++, song.m_sMainTitleTranslit);
+	insertSong.bind(index++, song.m_sSubTitleTranslit);
+	insertSong.bind(index++, song.m_sArtistTranslit);
+	insertSong.bind(index++, song.m_sGenre);
+	insertSong.bind(index++, song.m_sOrigin);
+	insertSong.bind(index++, song.m_sCredit);
+	insertSong.bind(index++, song.m_sBannerFile);
+	insertSong.bind(index++, song.m_sBackgroundFile);
+	insertSong.bind(index++, song.m_sPreviewVidFile);
+	insertSong.bind(index++, song.m_sJacketFile);
+	insertSong.bind(index++, song.m_sCDFile);
+	insertSong.bind(index++, song.m_sDiscFile);
+	insertSong.bind(index++, song.m_sLyricsFile);
+	insertSong.bind(index++, song.m_sCDTitleFile);
+	insertSong.bind(index++, song.m_sMusicFile);
+	insertSong.bind(index++, song.m_PreviewFile);
+	{
+		auto vs = song.GetInstrumentTracksToVectorString();
+		if (!vs.empty())
+		{
+			std::string s = join(",", vs);
+			insertSong.bind(index++, s);
+		}
+		else {
+			insertSong.bind(index++);
+		}
+	}
+	insertSong.bind(index++, song.m_SongTiming.m_fBeat0OffsetInSeconds);
+	insertSong.bind(index++, song.m_fMusicSampleStartSeconds);
+	insertSong.bind(index++, song.m_fMusicSampleLengthSeconds);
+
+	//f.Write("#SELECTABLE:");
+	//Selectable should be stored as int
+	switch (song.m_SelectionDisplay)
+	{
+	default: ASSERT_M(0, "An invalid selectable value was found for this song!"); // fall through
+	case Song::SHOW_ALWAYS:	insertSong.bind(index++, "YES");		break;
+		//case Song::SHOW_NONSTOP:	f.Write( "NONSTOP" );	break;
+	case Song::SHOW_NEVER:		insertSong.bind(index++, "NO");		break;
+	}
+
+	//find a better way to store bpm
+	switch (song.m_DisplayBPMType)
+	{
+	case DISPLAY_BPM_ACTUAL:
+		// write nothing
+		break;
+	case DISPLAY_BPM_SPECIFIED:
+		if (song.m_fSpecifiedBPMMin == song.m_fSpecifiedBPMMax)
+		{
+			insertSong.bind(index++, ssprintf("%.6f", song.m_fSpecifiedBPMMin));
+		}
+		else
+		{
+			insertSong.bind(index++, ssprintf("%.6f:%.6f", song.m_fSpecifiedBPMMin, song.m_fSpecifiedBPMMax));
+		}
+		break;
+	case DISPLAY_BPM_RANDOM:
+		insertSong.bind(index++, "*");
+		break;
+	default:
+		insertSong.bind(index++);
+		break;
+	}
+
+
+	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_BPM, 3)));
+	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_STOP, 3)));
+	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_DELAY, 3)));
+	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_WARP, 3)));
+	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_TIME_SIG, 3)));
+	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_TICKCOUNT, 3)));
+	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_COMBO, 3)));
+
+	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_SPEED, 3)));
+	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_SCROLL, 3)));
+	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_FAKE, 3)));
+	insertSong.bind(index++, join(",\r\n", song.m_SongTiming.ToVectorString(SEGMENT_LABEL, 3)));
+
+	if (song.GetSpecifiedLastSecond() > 0)
+	{
+		insertSong.bind(index++, song.GetSpecifiedLastSecond());
+	}
+	else {
+		insertSong.bind(index++);
+	}
+	/*
+	// @brief The different background layers available. 
+	enum BackgroundLayer
+	{
+		BACKGROUND_LAYER_1,
+		BACKGROUND_LAYER_2,
+		//BACKGROUND_LAYER_3, // StepCollection get
+		NUM_BackgroundLayer,
+		BACKGROUND_LAYER_Invalid
+	}; */
+	FOREACH_BackgroundLayer(b)
+	{
+		string bgchanges = "";
+		if (song.GetBackgroundChanges(b).empty())
+		{
+			insertSong.bind(index++);
+			continue;	// skip
+		}
+		for (auto &bgc : song.GetBackgroundChanges(b))
+		{
+			bgchanges.append(bgc.ToString() + ",");
+		}
+
+		/* If there's an animation plan at all, add a dummy "-nosongbg-" tag to
+		* indicate that this file doesn't want a song BG entry added at the end.
+		* See SSCLoader::TidyUpData. This tag will be removed on load. Add it
+		* at a very high beat, so it won't cause problems if loaded in older versions. */
+		if (b == 0 && !song.GetBackgroundChanges(b).empty())
+		{
+			bgchanges.append("99999=-nosongbg-=1.000=0=0=0");
+		}
+		insertSong.bind(index++, bgchanges);
+	}
+
+	if (song.GetForegroundChanges().size())
+	{
+		string fgchanges;
+		for (auto const &bgc : song.GetForegroundChanges())
+		{
+			fgchanges.append(bgc.ToString() + ",");
+		}
+		insertSong.bind(index++, fgchanges);
+	}
+	else {
+		insertSong.bind(index++);
+	}
+
+	if (!song.m_vsKeysoundFile.empty())
+	{
+		for (unsigned i = 0; i < song.m_vsKeysoundFile.size(); i++)
+		{
+			// some keysound files has the first sound that starts with #,
+			// which makes MsdFile fail parsing the whole declaration.
+			// in this case, add a backslash at the front
+			// (#KEYSOUNDS:\#bgm.wav,01.wav,02.wav,..) and handle that on load.
+			if (i == 0 && song.m_vsKeysoundFile[i].size() > 0 && song.m_vsKeysoundFile[i][0] == '#')
+			{
+				//f.Write("\\");
+				insertSong.bind(index++, song.m_vsKeysoundFile[i].substr(1, song.m_vsKeysoundFile[i].size()-1));
+			}
+			else {
+				insertSong.bind(index++, song.m_vsKeysoundFile[i]);
+			}
+			//f.Write(song.m_vsKeysoundFile[i]);
+
+		}
+	}
+	else {
+		insertSong.bind(index++);
+	}
+
+
+
+	insertSong.bind(index++, song.GetFirstSecond());
+	insertSong.bind(index++, song.GetLastSecond());
+	insertSong.bind(index++, song.m_sSongFileName.c_str());
+	insertSong.bind(index++, song.m_bHasMusic);
+	insertSong.bind(index++, song.m_bHasBanner);
+	insertSong.bind(index++, song.m_fMusicLengthSeconds);
+	insertSong.exec();
+	int songID = sqlite3_last_insert_rowid(db->getHandle());
+	vector<Steps*> vpStepsToSave = song.GetStepsToSave();
+	FOREACH_CONST(Steps*, vpStepsToSave, s)
+	{
+		const Steps* pSteps = *s;
+		if (pSteps->GetChartKey() == "") {		// Avoid writing cache tags for invalid chartkey files(empty steps) -Mina
+			LOG->Info("Not caching empty difficulty in file %s", dir.c_str());
+			continue;
+		}
+		int stepsID = InsertSteps(pSteps, songID);
+	}
+	return true;
+}
 /*	Load a song from Cache DB
 	Returns true if it was loaded**/
 bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
@@ -106,9 +524,6 @@ bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
 
 	//SSC::StepsTagInfo reused_steps_info(&*song, &out, dir, true);
 	SSCLoader loader;
-	Steps* pNewNotes = nullptr;
-	TimingData stepsTiming;
-	pNewNotes->m_Timing = stepsTiming;
 	int songid = query.getColumn(0);
 	int index = 1;
 	song->m_fVersion = static_cast<double>(query.getColumn(index++));
@@ -223,9 +638,48 @@ bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
 	song->m_bHasMusic = static_cast<int>(query.getColumn(index++)) != 0;
 	song->m_bHasBanner = static_cast<int>(query.getColumn(index++)) != 0;
 
+	Steps* pNewNotes = nullptr;
+	TimingData stepsTiming;
+	pNewNotes->m_Timing = stepsTiming;
 	SQLite::Statement qSteps(*db, "SELECT * FROM steps WHERE SONGID=" + to_string(songid));
+
 	while (query.tryExecuteStep()) {
 
+		//state = GETTING_STEP_INFO;
+		pNewNotes = song->CreateSteps();
+		stepsTiming = TimingData(song->m_SongTiming.m_fBeat0OffsetInSeconds);
+		reused_steps_info.has_own_timing = false;
+		reused_steps_info.steps = pNewNotes;
+		reused_steps_info.timing = &stepsTiming;
+
+		if (handler != parser_helper.steps_tag_handlers.end())
+		{
+			handler->second(reused_steps_info);
+		}
+		else if (sValueName == "NOTES" || sValueName == "NOTES2")
+		{
+			//state = GETTING_SONG_INFO;
+			if (reused_steps_info.has_own_timing)
+			{
+				pNewNotes->m_Timing = stepsTiming;
+			}
+			reused_steps_info.has_own_timing = false;
+			pNewNotes->SetSMNoteData(sParams[1]);
+			pNewNotes->TidyUpData();
+			pNewNotes->SetFilename(sPath);
+			out.AddSteps(pNewNotes);
+		}
+		else if (sValueName == "STEPFILENAME")
+		{
+			state = GETTING_SONG_INFO;
+			if (reused_steps_info.has_own_timing)
+			{
+				pNewNotes->m_Timing = stepsTiming;
+			}
+			reused_steps_info.has_own_timing = false;
+			pNewNotes->SetFilename(sParams[1]);
+			out.AddSteps(pNewNotes);
+		}
 	}
 
 	//Up to here its in order
@@ -328,12 +782,8 @@ bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
 		// to hit the song folder to find the files that weren't found. -Kyz
 		song->TidyUpData(false, false);
 	}
-}	
-/*	Save a song to the cache db*/
-bool SaveSong(Song* song, string dir)
-{
-	return true;
 }
+
 /*	Reset the DB/
 	Must be open already	*/
 void SongCacheIndex::ResetDB()
