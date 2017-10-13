@@ -215,7 +215,7 @@ int SongCacheIndex::InsertStepsTimingData(TimingData timing)
 				const  LabelSegment* segment = ToLabel(seg);
 				if (!segment->GetLabel().empty())
 				{
-					labels.append(ssprintf("%.6f=%s", NoteRowToBeat(segment->GetRow()), segment->GetLabel()));
+					labels.append(ssprintf("%.6f=%s", NoteRowToBeat(segment->GetRow()), segment->GetLabel().c_str()));
 				}
 			}
 		}
@@ -462,16 +462,16 @@ bool SongCacheIndex::CacheSong(Song& song, string dir)
 		}
 
 		if (!song.m_vsKeysoundFile.empty()) {
+			string keysounds="";
 			for (unsigned i = 0; i < song.m_vsKeysoundFile.size(); i++)
 			{
-				if (i == 0 && song.m_vsKeysoundFile[i].size() > 0 && song.m_vsKeysoundFile[i][0] == '#')
+				keysounds.append(song.m_vsKeysoundFile[i]);
+				if (i != song.m_vsKeysoundFile.size() - 1)
 				{
-					insertSong.bind(index++, song.m_vsKeysoundFile[i].substr(1, song.m_vsKeysoundFile[i].size() - 1));
-				}
-				else {
-					insertSong.bind(index++, song.m_vsKeysoundFile[i]);
+					keysounds.append(",");
 				}
 			}
+			insertSong.bind(index++, keysounds);
 		}
 		else {
 			insertSong.bind(index++);
@@ -549,6 +549,12 @@ void SongCacheIndex::CreateDBTables()
 		"TIMINGDATAID INTEGER, DISPLAYBPMMIN FLOAT, DISPLAYBPMMAX FLOAT, STEPFILENAME TEXT, SONGID INTEGER, "
 		"CONSTRAINT fk_songid FOREIGN KEY (SONGID) REFERENCES songs(id), "
 		"CONSTRAINT fk_timingdataid FOREIGN KEY (TIMINGDATAID) REFERENCES songs(ID))");
+	db->exec("CREATE INDEX IF NOT EXISTS idx_dirs "
+		"ON songs(DIR, DIRHASH)");
+	db->exec("CREATE INDEX IF NOT EXISTS idx_timingdatas "
+		"ON timingdatas(ID)");
+	db->exec("CREATE INDEX IF NOT EXISTS idx_steps "
+		"ON steps(SONGID)");
 	db->exec("INSERT INTO dbinfo VALUES (NULL, " + CACHE_DB_VERSION + ")");
 }
 /*	Returns weather or not the db had valid data*/
@@ -558,8 +564,16 @@ bool SongCacheIndex::OpenDB()
 	//Try to open ane existing db
 	try {
 		db = new SQLite::Database(FILEMAN->ResolvePath(CACHE_DB), SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE | SQLITE_OPEN_FULLMUTEX);
+		StartTransaction();
+		db->exec("CREATE INDEX IF NOT EXISTS idx_dirs "
+			"ON songs(DIR, DIRHASH)");
+		db->exec("CREATE INDEX IF NOT EXISTS idx_timingdatas "
+			"ON timingdatas(ID)");
+		db->exec("CREATE INDEX IF NOT EXISTS idx_steps "
+			"ON steps(SONGID)");
 		if (!ret) {
 			ResetDB();
+			FinishTransaction();
 			return false;
 		}
 		SQLite::Statement   qDBInfo(*db, "SELECT * FROM dbinfo");
@@ -567,20 +581,22 @@ bool SongCacheIndex::OpenDB()
 		//Should only have one row so no executeStep loop
 		if (!qDBInfo.executeStep()) {
 			ResetDB();
+			FinishTransaction();
 			return false;
 		}
 		string cacheVersion = "";
 		cacheVersion = static_cast<const char *>(qDBInfo.getColumn(1));
-		if (cacheVersion == CACHE_DB_VERSION)
+		if (cacheVersion == CACHE_DB_VERSION) {
+			FinishTransaction();
 			return true;
-		ResetDB();
+		}
 	}
 	catch (std::exception& e)
 	{
 		LOG->Trace("Error reading cache db: %s", e.what());
-		ResetDB();
-		return false;
 	}
+	FinishTransaction();
+	ResetDB();
 	return false;
 }
 
@@ -663,6 +679,20 @@ RString SongCacheIndex::MangleName(const RString &Name)
 	RString ret = Name;
 	ret.Replace("=", "");
 	return ret;
+}
+
+void SongCacheIndex::StartTransaction()
+{
+	if (curTransaction != nullptr)
+		return;
+	curTransaction = new SQLite::Transaction(*db);
+}
+void SongCacheIndex::FinishTransaction()
+{
+	curTransaction->commit();
+	delete curTransaction;
+	curTransaction = nullptr;
+	return;
 }
 
 /*	Load a song from Cache DB
@@ -827,32 +857,33 @@ bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
 			* as the Song's timing. No other changes are required. */
 			if(!qSteps.isColumnNull(stepsIndex)) {
 				int timingID = qSteps.getColumn(stepsIndex++);
+				int timingIndex = 1; //Skip the first value, the id
 				SQLite::Statement qTiming(*db, "SELECT * FROM timingdatas WHERE ID=" + to_string(timingID));
 				if (qTiming.executeStep()) {
 					TimingData stepsTiming = TimingData(song->m_SongTiming.m_fBeat0OffsetInSeconds);
 					//Load timing data
-					SSCLoader::ProcessBPMs(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+					stepsTiming.m_fBeat0OffsetInSeconds = static_cast<double>(qTiming.getColumn(timingIndex++));
+					SSCLoader::ProcessBPMs(stepsTiming, static_cast<const char*>(qSteps.getColumn(timingIndex++)), dir);
 					//steps_tag_handlers["BPMS"] = &SetStepsBPMs;
-					SSCLoader::ProcessStops(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+					SSCLoader::ProcessStops(stepsTiming, static_cast<const char*>(qTiming.getColumn(timingIndex++)), dir);
 					//steps_tag_handlers["STOPS"] = &SetStepsStops;
-					SSCLoader::ProcessDelays(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+					SSCLoader::ProcessDelays(stepsTiming, static_cast<const char*>(qTiming.getColumn(timingIndex++)), dir);
 					//steps_tag_handlers["DELAYS"] = &SetStepsDelays;
-					SSCLoader::ProcessTimeSignatures(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
-					//steps_tag_handlers["TIMESIGNATURES"] = &SetStepsTimeSignatures;
-					SSCLoader::ProcessTickcounts(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
-					//steps_tag_handlers["TICKCOUNTS"] = &SetStepsTickCounts;
-					SSCLoader::ProcessCombos(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
-					//steps_tag_handlers["COMBOS"] = &SetStepsCombos;
-					SSCLoader::ProcessWarps(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), song->m_fVersion, dir);
+					SSCLoader::ProcessWarps(stepsTiming, static_cast<const char*>(qTiming.getColumn(timingIndex++)), song->m_fVersion, dir);
 					//steps_tag_handlers["WARPS"] = &SetStepsWarps;
-					SSCLoader::ProcessSpeeds(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+					SSCLoader::ProcessTimeSignatures(stepsTiming, static_cast<const char*>(qTiming.getColumn(timingIndex++)), dir);
+					//steps_tag_handlers["TIMESIGNATURES"] = &SetStepsTimeSignatures;
+					SSCLoader::ProcessTickcounts(stepsTiming, static_cast<const char*>(qTiming.getColumn(timingIndex++)), dir);
+					//steps_tag_handlers["TICKCOUNTS"] = &SetStepsTickCounts;
+					SSCLoader::ProcessCombos(stepsTiming, static_cast<const char*>(qTiming.getColumn(timingIndex++)), dir);
+					//steps_tag_handlers["COMBOS"] = &SetStepsCombos;
+					SSCLoader::ProcessSpeeds(stepsTiming, static_cast<const char*>(qTiming.getColumn(timingIndex++)), dir);
 					//steps_tag_handlers["SPEEDS"] = &SetStepsSpeeds;
-					SSCLoader::ProcessScrolls(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+					SSCLoader::ProcessScrolls(stepsTiming, static_cast<const char*>(qTiming.getColumn(timingIndex++)), dir);
 					//steps_tag_handlers["SCROLLS"] = &SetStepsScrolls;
-					SSCLoader::ProcessFakes(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+					SSCLoader::ProcessFakes(stepsTiming, static_cast<const char*>(qTiming.getColumn(timingIndex++)), dir);
 					//steps_tag_handlers["FAKES"] = &SetStepsFakes;
-					SSCLoader::ProcessLabels(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
-					stepsTiming.m_fBeat0OffsetInSeconds = static_cast<double>(qTiming.getColumn(stepsIndex++));
+					SSCLoader::ProcessLabels(stepsTiming, static_cast<const char*>(qTiming.getColumn(timingIndex++)), dir);
 					pNewNotes->m_Timing = stepsTiming;
 				}
 			}
