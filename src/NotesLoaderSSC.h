@@ -67,6 +67,7 @@ namespace SSC {
 			:loader(l), song(s), path(p), from_cache(fc)
 		{}
 	};
+	vector<float> msdsplit(const RString& s);
 }
 /** @brief The version where fakes started to be used as a radar category. */
 const float VERSION_RADAR_FAKE = 0.53f;
@@ -124,12 +125,14 @@ struct SSCLoader : public SMLoader
 	 * @return true if successful, false otherwise. */
 	bool LoadNoteDataFromSimfile( const RString &cachePath, Steps &out ) override;
 	
-	void ProcessBPMs( TimingData &, const RString &sParam );
-	void ProcessStops( TimingData &, const RString &sParam );
-	void ProcessWarps( TimingData &, const RString &sParam, const float );
-	void ProcessLabels( TimingData &, const RString &param );
-	void ProcessCombos( TimingData &, const RString &line, const int = -1 ) override;
-	void ProcessScrolls( TimingData &, const RString );
+	static void ProcessBPMs( TimingData &, const RString &sParam, string songName);
+	static void ProcessStops( TimingData &, const RString &sParam, string songName);
+	static void ProcessWarps( TimingData &, const RString &sParam, const float, string songName);
+	static void ProcessLabels(TimingData &out, const RString &sParam, string songName);
+	static void ProcessCombos( TimingData &, const RString &line, string songName, const int = -1);
+	void ProcessCombos(TimingData &, const RString &line, const int = -1) override;
+	static void ProcessScrolls( TimingData &, const RString sParam, string songName);
+
 };
 
 #endif

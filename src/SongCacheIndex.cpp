@@ -4,6 +4,7 @@
 #include "RageLog.h"
 #include "RageUtil.h"
 #include "RageFileManager.h"
+#include "GameManager.h"
 #include "Song.h"
 #include "SpecialFiles.h"
 #include "Steps.h"
@@ -231,7 +232,7 @@ int SongCacheIndex::InsertSteps(const Steps* pSteps, int songID)
 	insertSteps.bind(stepsIndex++, pSteps->m_StepsTypeStr);
 	insertSteps.bind(stepsIndex++, pSteps->GetDescription());
 	insertSteps.bind(stepsIndex++, pSteps->GetChartStyle());
-	insertSteps.bind(stepsIndex++, DifficultyToString(pSteps->GetDifficulty()));
+	insertSteps.bind(stepsIndex++, pSteps->GetDifficulty());
 	insertSteps.bind(stepsIndex++, pSteps->GetMeter());
 	insertSteps.bind(stepsIndex++, NotesWriterSSC::MSDToString(pSteps->GetAllMSD()).c_str());//msdvalues
 	insertSteps.bind(stepsIndex++, SmEscape(pSteps->GetChartKey()).c_str());//chartkey
@@ -290,16 +291,16 @@ bool SongCacheIndex::SaveSong(Song& song, string dir)
 	SQLite::Statement insertSong(*db, "INSERT INTO songs VALUES (NULL, "
 		"VERSION=?, TITLE=?, SUBTITLE=?, ARTIST=?, TITLETRANSLIT=?, "
 		"SUBTITLETRANSLIT=?, ARTISTTRANSLIT=?, GENRE=?, "
-		"ORIGIN=?, CREDIT=?, BANNER=?, BACKGROUND:=?"
+		"ORIGIN=?, CREDIT=?, BANNER=?, BACKGROUND=?"
 		"PREVIEWVID=?, JACKET=?, CDIMAGE=?, DISCIMAGE=?, "
-		"LYRICSPATH, CDTITLE=?, MUSIC=?, PREVIEW=?, INSTRUMENTTRACK=?, "
+		"LYRICSPATH=?, CDTITLE=?, MUSIC=?, PREVIEW=?, INSTRUMENTTRACK=?, "
 		"OFFSET=?, SAMPLESTART=?, SAMPLELENGTH=?, SELECTABLE=?, "
 		"DISPLAYBPM=?, BPMS=?, STOPS=?, DELAYS=?, WARPS=?, "
 		"TIMESIGNATURES=?, TICKCOUNTS=?, COMBOS=?, SPEEDS=?, "
 		"SCROLLS=?, FAKES=?, LABELS=?, LASTSECONDHINT=?, "
 		"BGCHANGESLAYER1=?, BGCHANGESLAYER2=?, FGCHANGES=?, "
 		"KEYSOUNDS=?, FIRSTSECOND=?, LASTSECOND=?, "
-		"SONGFILENAME=?, HASMUSIC=?, HASBANNER=?, MUSICLENGTH=?)");
+		"SONGFILENAME=?, HASMUSIC=?, HASBANNER=?, MUSICLENGTH=?, DIRHASH=?)");
 	unsigned int index = 0;
 	insertSong.bind(index++, STEPFILE_VERSION_NUMBER);
 	insertSong.bind(index++, song.m_sMainTitle);
@@ -337,29 +338,36 @@ bool SongCacheIndex::SaveSong(Song& song, string dir)
 	switch (song.m_SelectionDisplay)
 	{
 	default: ASSERT_M(0, "An invalid selectable value was found for this song!"); // fall through
-	case Song::SHOW_ALWAYS:	insertSong.bind(index++, "YES");		break;
-	case Song::SHOW_NEVER:		insertSong.bind(index++, "NO");		break;
+	case Song::SHOW_ALWAYS:	insertSong.bind(index++, 0);		break;
+	case Song::SHOW_NEVER:		insertSong.bind(index++, 1);		break;
 	}
-	//find a better way to store bpm
+
 	switch (song.m_DisplayBPMType)
 	{
 	case DISPLAY_BPM_ACTUAL:
-		// write nothing
+		// write nothing(Both nulls)
+		insertSong.bind(index++);
+		insertSong.bind(index++);
 		break;
 	case DISPLAY_BPM_SPECIFIED:
 		if (song.m_fSpecifiedBPMMin == song.m_fSpecifiedBPMMax)
 		{
-			insertSong.bind(index++, ssprintf("%.6f", song.m_fSpecifiedBPMMin));
+			insertSong.bind(index++, song.m_fSpecifiedBPMMin);
+			insertSong.bind(index++, song.m_fSpecifiedBPMMin);
 		}
 		else
 		{
-			insertSong.bind(index++, ssprintf("%.6f:%.6f", song.m_fSpecifiedBPMMin, song.m_fSpecifiedBPMMax));
+			insertSong.bind(index++, song.m_fSpecifiedBPMMin);
+			insertSong.bind(index++, song.m_fSpecifiedBPMMax);
 		}
 		break;
 	case DISPLAY_BPM_RANDOM:
-		insertSong.bind(index++, "*");
+		//Write only one as null
+		insertSong.bind(index++);
+		insertSong.bind(index++, 0.0);
 		break;
 	default:
+		insertSong.bind(index++);
 		insertSong.bind(index++);
 		break;
 	}
@@ -449,6 +457,7 @@ bool SongCacheIndex::SaveSong(Song& song, string dir)
 	insertSong.bind(index++, song.m_bHasMusic);
 	insertSong.bind(index++, song.m_bHasBanner);
 	insertSong.bind(index++, song.m_fMusicLengthSeconds);
+	insertSong.bind(index++, GetHashForDirectory(song.GetSongDir()));
 	insertSong.exec();
 	int songID = sqlite3_last_insert_rowid(db->getHandle());
 	vector<Steps*> vpStepsToSave = song.GetStepsToSave();
@@ -496,15 +505,15 @@ void SongCacheIndex::ResetDB()
 		"PREVIEWVID TEXT, JACKET TEXT, CDIMAGE TEXT, DISCIMAGE TEXT, "
 		"LYRICSPATH TEXT, CDTITLE TEXT, MUSIC TEXT, PREVIEW TEXT, INSTRUMENTTRACK TEXT, "
 		"OFFSET FLOAT, SAMPLESTART FLOAT, SAMPLELENGTH FLOAT, SELECTABLE TEXT, "
-		"DISPLAYBPM TEXT, BPMS TEXT, STOPS TEXT, DELAYS TEXT, WARPS TEXT, "
+		"DISPLAYBPMMIN FLOAT, DISPLAYBPM MAX FLOAT, BPMS TEXT, STOPS TEXT, DELAYS TEXT, WARPS TEXT, "
 		"TIMESIGNATURES TEXT, TICKCOUNTS TEXT, COMBOS TEXT, SPEEDS TEXT, "
 		"SCROLLS TEXT, FAKES TEXT, LABELS TEXT, LASTSECONDHINT FLOAT, "
 		"BGCHANGESLAYER1 TEXT, BGCHANGESLAYER2 TEXT, FGCHANGES TEXT, "
 		"KEYSOUNDS TEXT, FIRSTSECOND FLOAT, LASTSECOND FLOAT, "
-		"SONGFILENAME TEXT, HASMUSIC TEXT, HASBANNER TEXT, MUSICLENGTH FLOAT)");
+		"SONGFILENAME TEXT, HASMUSIC TEXT, HASBANNER TEXT, MUSICLENGTH FLOAT, DIRHASH INTEGER)");
 	db->exec("CREATE TABLE IF NOT EXISTS steps (id INTEGER PRIMARY KEY, "
-		"CHARTNAME TEXT, STEPSTYPE TEXT, DESCRIPTION TEXT, CHARTSTYLE TEXT, DIFFICULTY TEXT, "
-		"METER TEXT, MSDVALUES TEXT, CHARTKEY TEXT, MUSIC TEXT, RADARVALUES TEXT, CREDIT TEXT, "
+		"CHARTNAME TEXT, STEPSTYPE TEXT, DESCRIPTION TEXT, CHARTSTYLE TEXT, DIFFICULTY INTEGER, "
+		"METER INTEGER, MSDVALUES TEXT, CHARTKEY TEXT, MUSIC TEXT, RADARVALUES TEXT, CREDIT TEXT, "
 		"TIMINGDATAID TEXT, DISPLAYBPM TEXT, STEPFILENAME TEXT, SONGID INTEGER, "
 		"CONSTRAINT fk_songid FOREIGN KEY (SONGID) REFERENCES songs(id), "
 		"CONSTRAINT fk_timingdataid FOREIGN KEY (TIMINGDATAID) REFERENCES songs(ID))");
@@ -627,19 +636,236 @@ RString SongCacheIndex::MangleName(const RString &Name)
 	Returns true if it was loaded**/
 bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
 {
-	/*
-	LOG->Trace("Loading '%s' from cache file '%s'.",
-	m_sSongDir.c_str(),
-	GetCacheFilePath().c_str());
-	*/
-	/*db->exec("CREATE TABLE IF NOT EXISTS songs(VERSION, TITLE, "
-		"SUBTITLE, ARTIST, BANNER, BACKGROUND, CDTITLE, MUSIC, OFFSET, SAMPLESTART, "
-		"SAMPLELENGTH, SELECTABLE, BPMS, TIMESIGNATURES, TICKCOUNTS, "
-		"COMBOS, SPEEDS, SCROLLS, LABELS, FIRSTSECOND, LASTSECOND, "
-		"SONGFILENAME, HASMUSIC, HASBANNER, MUSICLENGTH, DIR)");*/
-	/*db->exec("CREATE TABLE IF NOT EXISTS charts (NOTEDATA, "
-		"STEPSTYPE, DIFFICULTY, METER, MSDVALUES, CHARTKEY, "
-		"RADARVALUES, STEPFILENAME)");*/
+	db->exec("CREATE TABLE IF NOT EXISTS songs (ID INTEGER PRIMARY KEY, "
+		"VERSION TEXT, TITLE TEXT, SUBTITLE TEXT, ARTIST TEXT, TITLETRANSLIT TEXT, "
+		"SUBTITLETRANSLIT TEXT, ARTISTTRANSLIT TEXT, GENRE TEXT, "
+		"ORIGIN TEXT, CREDIT TEXT, BANNER TEXT, BACKGROUND TEXT, "
+		"PREVIEWVID TEXT, JACKET TEXT, CDIMAGE TEXT, DISCIMAGE TEXT, "
+		"LYRICSPATH TEXT, CDTITLE TEXT, MUSIC TEXT, PREVIEW TEXT, INSTRUMENTTRACK TEXT, "
+		"OFFSET FLOAT, SAMPLESTART FLOAT, SAMPLELENGTH FLOAT, SELECTABLE TEXT, "
+		"DISPLAYBPMMIN FLOAT, DISPLAYBPM MAX FLOAT, BPMS TEXT, STOPS TEXT, DELAYS TEXT, WARPS TEXT, "
+		"TIMESIGNATURES TEXT, TICKCOUNTS TEXT, COMBOS TEXT, SPEEDS TEXT, "
+		"SCROLLS TEXT, FAKES TEXT, LABELS TEXT, LASTSECONDHINT FLOAT, "
+		"BGCHANGESLAYER1 TEXT, BGCHANGESLAYER2 TEXT, FGCHANGES TEXT, "
+		"KEYSOUNDS TEXT, FIRSTSECOND FLOAT, LASTSECOND FLOAT, "
+		"SONGFILENAME TEXT, HASMUSIC TEXT, HASBANNER TEXT, MUSICLENGTH FLOAT, DIRHASH INTEGER)");
+
+	SQLite::Statement query(*db, "SELECT * FROM songs WHERE DIR=? AND DIRHASH=?");
+	query.bind(1, dir);
+	query.bind(2, GetHashForDirectory(song->GetSongDir()));
+
+	//No cache entry => return false
+	if (!query.tryExecuteStep())
+		return false;
+
+	//SSC::StepsTagInfo reused_steps_info(&*song, &out, dir, true);
+	SSCLoader loader;
+	int songid = query.getColumn(0);
+	int index = 1;
+	song->m_fVersion = static_cast<double>(query.getColumn(index++));
+	song->m_sMainTitle = static_cast<const char *>(query.getColumn(index++));
+	song->m_sSubTitle = static_cast<const char *>(query.getColumn(index++));
+	song->m_sArtist = static_cast<const char *>(query.getColumn(index++));
+	song->m_sMainTitleTranslit = static_cast<const char *>(query.getColumn(index++));
+	song->m_sSubTitleTranslit = static_cast<const char *>(query.getColumn(index++));
+	song->m_sArtistTranslit = static_cast<const char *>(query.getColumn(index++));
+	song->m_sGenre = static_cast<const char *>(query.getColumn(index++));
+	song->m_sOrigin = static_cast<const char *>(query.getColumn(index++));
+	song->m_sCredit = static_cast<const char *>(query.getColumn(index++));
+	Trim(song->m_sCredit);
+	song->m_sBannerFile = static_cast<const char *>(query.getColumn(index++));
+	song->m_sBackgroundFile = static_cast<const char *>(query.getColumn(index++));
+	song->m_sPreviewVidFile = static_cast<const char *>(query.getColumn(index++));
+	song->m_sJacketFile = static_cast<const char *>(query.getColumn(index++));
+	song->m_sCDFile = static_cast<const char *>(query.getColumn(index++));
+	song->m_sDiscFile = static_cast<const char *>(query.getColumn(index++));
+	song->m_sLyricsFile = static_cast<const char *>(query.getColumn(index++));
+	song->m_sCDTitleFile = static_cast<const char *>(query.getColumn(index++));
+	song->m_sMusicFile = static_cast<const char *>(query.getColumn(index++));
+	song->m_PreviewFile = static_cast<const char *>(query.getColumn(index++));
+	loader.ProcessInstrumentTracks(*song, static_cast<const char *>(query.getColumn(index++))); 
+	song->SetSpecifiedLastSecond(static_cast<double>(query.getColumn(index++)));
+	song->m_fMusicSampleStartSeconds = static_cast<double>(query.getColumn(index++));
+	song->m_fMusicSampleLengthSeconds = static_cast<double>(query.getColumn(index++));
+	song->m_SongTiming.m_fBeat0OffsetInSeconds = static_cast<double>(query.getColumn(index++));
+
+	int selection = static_cast<int>(query.getColumn(index++));
+	if (selection == 0)
+		song->m_SelectionDisplay = song->SHOW_ALWAYS;
+	else
+		song->m_SelectionDisplay = song->SHOW_NEVER;
+
+	int bpmminIndex = index++;
+	int bpmmaxIndex = index++;
+	float BPMmin = static_cast<double>(query.getColumn(bpmminIndex));
+	float BPMmax = static_cast<double>(query.getColumn(bpmmaxIndex));
+	if (query.isColumnNull(bpmminIndex) || query.isColumnNull(bpmmaxIndex))
+	{
+		if (query.isColumnNull(bpmminIndex) && query.isColumnNull(bpmmaxIndex))
+			song->m_DisplayBPMType = DISPLAY_BPM_RANDOM;
+		else
+			song->m_DisplayBPMType = DISPLAY_BPM_ACTUAL;
+	}	
+	else
+	{
+		song->m_DisplayBPMType = DISPLAY_BPM_SPECIFIED;
+		song->m_fSpecifiedBPMMin = BPMmin;
+		song->m_fSpecifiedBPMMax = BPMmax;
+	}
+
+	loader.ProcessBPMs(song->m_SongTiming, song->GetMainTitle(), static_cast<const char *>(query.getColumn(index++)));
+	loader.ProcessStops(song->m_SongTiming, song->GetMainTitle(), static_cast<const char *>(query.getColumn(index++)));
+	loader.ProcessDelays(song->m_SongTiming, static_cast<const char *>(query.getColumn(index++)));
+	loader.ProcessWarps(song->m_SongTiming, static_cast<const char *>(query.getColumn(index++)), song->m_fVersion, song->GetMainTitle());
+	loader.ProcessTimeSignatures(song->m_SongTiming, static_cast<const char *>(query.getColumn(index++)));
+	loader.ProcessTickcounts(song->m_SongTiming, static_cast<const char *>(query.getColumn(index++)));
+	loader.ProcessCombos(song->m_SongTiming, static_cast<const char *>(query.getColumn(index++)));
+	loader.ProcessSpeeds(song->m_SongTiming, static_cast<const char *>(query.getColumn(index++)));
+	loader.ProcessScrolls(song->m_SongTiming, song->GetMainTitle(), static_cast<const char *>(query.getColumn(index++)));
+	loader.ProcessFakes(song->m_SongTiming, static_cast<const char *>(query.getColumn(index++)));
+	loader.ProcessLabels(song->m_SongTiming, song->GetMainTitle(), static_cast<const char *>(query.getColumn(index++)));
+
+	song->SetSpecifiedLastSecond(static_cast<double>(query.getColumn(index++)));
+
+	string animations = static_cast<const char *>(query.getColumn(index++));
+	string animationstwo = static_cast<const char *>(query.getColumn(index++));
+	loader.ProcessBGChanges(*song, animations,
+		dir, animationstwo);
+	vector<RString> aFGChangeExpressions;
+	split(static_cast<const char *>(query.getColumn(index++)), ",", aFGChangeExpressions);
+
+	for (size_t b = 0; b < aFGChangeExpressions.size(); ++b)
+	{
+		BackgroundChange change;
+		if (loader.LoadFromBGChangesString(change, aFGChangeExpressions[b]))
+		{
+			song->AddForegroundChange(change);
+		}
+	}
+	RString keysounds = static_cast<const char *>(query.getColumn(index++));
+	if (keysounds.length() >= 2 && keysounds.substr(0, 2) == "\\#")
+	{
+		keysounds = keysounds.substr(1);
+	}
+	split(keysounds, ",", song->m_vsKeysoundFile);
+	song->SetFirstSecond(static_cast<double>(query.getColumn(index++)));
+	song->SetLastSecond(static_cast<double>(query.getColumn(index++)));
+	song->m_sSongFileName = static_cast<const char *>(query.getColumn(index++));
+	song->m_bHasMusic = static_cast<int>(query.getColumn(index++)) != 0;
+	song->m_bHasBanner = static_cast<int>(query.getColumn(index++)) != 0;
+	song->m_fMusicLengthSeconds = static_cast<double>(query.getColumn(index++));
+
+	Steps* pNewNotes = nullptr;
+
+	SQLite::Statement qSteps(*db, "SELECT * FROM steps WHERE SONGID=" + to_string(songid));
+
+	while (qSteps.tryExecuteStep()) {
+		int stepsIndex = 0;
+		//state = GETTING_STEP_INFO;
+		pNewNotes = song->CreateSteps();
+		pNewNotes->SetFilename(dir);
+		TimingData stepsTiming = TimingData(song->m_SongTiming.m_fBeat0OffsetInSeconds);
+		song->m_fVersion = static_cast<double>(qSteps.getColumn(stepsIndex++));
+		RString chartName = static_cast<const char*>(qSteps.getColumn(stepsIndex++));
+		Trim(chartName);
+		pNewNotes->SetChartName(chartName);
+		string stepsType = static_cast<const char*>(qSteps.getColumn(stepsIndex++));
+		pNewNotes->m_StepsType = GAMEMAN->StringToStepsType(stepsType);
+		pNewNotes->m_StepsTypeStr = stepsType;
+		pNewNotes->SetChartStyle(static_cast<const char*>(qSteps.getColumn(stepsIndex++)));
+		RString description = static_cast<const char*>(qSteps.getColumn(stepsIndex++));
+		Trim(description);
+		pNewNotes->SetDescription(description);
+		pNewNotes->SetDifficulty(static_cast<Difficulty>(static_cast<int>(qSteps.getColumn(stepsIndex++))));
+		pNewNotes->SetMeter(static_cast<int>(qSteps.getColumn(stepsIndex++)));
+		pNewNotes->SetMusicFile(static_cast<const char*>(qSteps.getColumn(stepsIndex++)));
+		string radarValues = static_cast<const char*>(qSteps.getColumn(stepsIndex++));
+		vector<RString> values;
+		split(radarValues, ",", values, true);
+		RadarValues rv;
+		rv.Zero();
+		for (size_t i = 0; i < NUM_RadarCategory; ++i)
+			rv[i] = StringToInt(values[i]);
+		pNewNotes->SetCachedRadarValues(rv);
+		pNewNotes->SetCredit(static_cast<const char*>(qSteps.getColumn(stepsIndex++)));
+
+		/* If this is called, the chart does not use the same attacks
+		* as the Song's timing. No other changes are required. */
+		int bpmminIndex = stepsIndex++;
+		int bpmmaxIndex = stepsIndex++;
+		float BPMmin = static_cast<double>(qSteps.getColumn(bpmminIndex));
+		float BPMmax = static_cast<double>(qSteps.getColumn(bpmmaxIndex));
+		if (qSteps.isColumnNull(bpmminIndex) || qSteps.isColumnNull(bpmmaxIndex))
+		{
+			if (qSteps.isColumnNull(bpmminIndex) && qSteps.isColumnNull(bpmmaxIndex))
+				pNewNotes->SetDisplayBPM(DISPLAY_BPM_RANDOM);
+			else
+				pNewNotes->SetDisplayBPM(DISPLAY_BPM_ACTUAL);
+		}
+		else
+		{
+			pNewNotes->SetDisplayBPM(DISPLAY_BPM_SPECIFIED);
+			pNewNotes->SetMinBPM(BPMmin);
+			pNewNotes->SetMaxBPM(BPMmax);
+		}
+		pNewNotes->SetChartKey(static_cast<const char*>(qSteps.getColumn(stepsIndex++)));
+		MinaSD o;
+		for (size_t i = 0; i <= NUM_Skillset; i++)
+			o.emplace_back(SSC::msdsplit(static_cast<const char*>(qSteps.getColumn(stepsIndex++))));
+		pNewNotes->SetAllMSD(o);
+
+		if(!qSteps.isColumnNull(stepsIndex+1)) {
+			int timingID = qSteps.getColumn(stepsIndex++);
+			SQLite::Statement qTiming(*db, "SELECT * FROM timingdatas WHERE STEPSID=" + to_string(timingID));
+			if (qTiming.tryExecuteStep()) {
+				//Load timing data
+				SSCLoader::ProcessBPMs(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+				//steps_tag_handlers["BPMS"] = &SetStepsBPMs;
+				SSCLoader::ProcessStops(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+				//steps_tag_handlers["STOPS"] = &SetStepsStops;
+				SSCLoader::ProcessDelays(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+				//steps_tag_handlers["DELAYS"] = &SetStepsDelays;
+				SSCLoader::ProcessTimeSignatures(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+				//steps_tag_handlers["TIMESIGNATURES"] = &SetStepsTimeSignatures;
+				SSCLoader::ProcessTickcounts(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+				//steps_tag_handlers["TICKCOUNTS"] = &SetStepsTickCounts;
+				SSCLoader::ProcessCombos(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+				//steps_tag_handlers["COMBOS"] = &SetStepsCombos;
+				SSCLoader::ProcessWarps(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), song->m_fVersion, dir);
+				//steps_tag_handlers["WARPS"] = &SetStepsWarps;
+				SSCLoader::ProcessSpeeds(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+				//steps_tag_handlers["SPEEDS"] = &SetStepsSpeeds;
+				SSCLoader::ProcessScrolls(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+				//steps_tag_handlers["SCROLLS"] = &SetStepsScrolls;
+				SSCLoader::ProcessFakes(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+				//steps_tag_handlers["FAKES"] = &SetStepsFakes;
+				SSCLoader::ProcessLabels(stepsTiming, static_cast<const char*>(qSteps.getColumn(stepsIndex++)), dir);
+				stepsTiming.m_fBeat0OffsetInSeconds = static_cast<double>(qTiming.getColumn(stepsIndex++));
+			}
+		}
+		pNewNotes->m_Timing = stepsTiming;
+		pNewNotes->TidyUpData();
+		song->AddSteps(pNewNotes);
+	}
+
+	song->m_SongTiming.m_sFile = dir; // songs still have their fallback timing.
+	song->m_sSongFileName = dir;
+	song->m_fVersion = STEPFILE_VERSION_NUMBER;
+	SMLoader::TidyUpData(*song, true);
+
+
+	if (song->m_sMainTitle == "" || (song->m_sMusicFile == "" && song->m_vsKeysoundFile.empty()))
+	{
+		LOG->Warn("Main title or music file for '%s' came up blank, forced to fall back on TidyUpData to fix title and paths.  Do not use # or ; in a song title.", dir.c_str());
+		// Tell TidyUpData that it's not loaded from the cache because it needs
+		// to hit the song folder to find the files that weren't found. -Kyz
+		song->TidyUpData(false, false);
+	}
+}
+/*
+bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
+{
+
 	db->exec("CREATE TABLE IF NOT EXISTS songs (VERSION, "
 		"TITLE, SUBTITLE, ARTIST, TITLETRANSLIT, SUBTITLETRANSLIT, "
 		"ARTISTTRANSLIT, GENRE, ORIGIN, CREDIT, BANNER, BACKGROUND, "
@@ -658,8 +884,8 @@ bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
 		"TIMESIGNATURES, TICKCOUNTS, COMBOS, WARPS, SPEEDS, SCROLLS, "
 		"FAKES, LABELS, OFFSET, DISPLAYBPM, CHARTKEY, MSDVALUES");
 
-	
-	SQLite::Statement query(*db, "SELECT * FROM songs WHERE DIR="+dir);
+
+	SQLite::Statement query(*db, "SELECT * FROM songs WHERE DIR=" + dir);
 	if (!query.tryExecuteStep())
 		return false;
 
@@ -727,8 +953,7 @@ bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
 	{
 		song->m_SelectionDisplay = song->SHOW_ALWAYS;
 	}
-	/* The following two cases are just fixes to make sure simfiles that
-	* used 3.9+ features are not excluded here */
+
 	else if (selection.EqualsNoCase("ES") || selection.EqualsNoCase("OMES"))
 	{
 		song->m_SelectionDisplay = song->SHOW_ALWAYS;
@@ -826,42 +1051,41 @@ bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
 	//Up to here its in order
 	//wip
 
-	// Functions for steps tags go below this line. -Kyz
-	/****************************************************************/
 
-		song->m_fVersion = StringToFloat(static_cast<const char *>(query.getColumn(index++)));{
-		RString name = static_cast<const char *>(query.getColumn(index++));
-		Trim(name);
-		info.steps->SetChartName(name);
-		info.steps->m_StepsType = GAMEMAN->StringToStepsType(static_cast<const char *>(query.getColumn(index++)));
-		info.steps->m_StepsTypeStr = static_cast<const char *>(query.getColumn(index++));
-		info.steps->SetChartStyle(static_cast<const char *>(query.getColumn(index++)));
-		RString name = static_cast<const char *>(query.getColumn(index++));
-		Trim(name);
-			info.steps->SetChartName(name);
-		info.steps->SetDifficulty(StringToDifficulty(static_cast<const char *>(query.getColumn(index++)));
-		info.steps->SetMeter(StringToInt(static_cast<const char *>(query.getColumn(index++)));
-		vector<RString> values;
-		split((*info.params)[1], ",", values, true);
-		RadarValues rv;
-		rv.Zero();
-		for (size_t i = 0; i < NUM_RadarCategory; ++i)
-			rv[i] = StringToInt(values[i]);
-		//info.steps->SetCachedRadarValues(rv);
+
+	song->m_fVersion = StringToFloat(static_cast<const char *>(query.getColumn(index++))); 
+	RString name = static_cast<const char *>(query.getColumn(index++));
+	Trim(name);
+	info.steps->SetChartName(name);
+	info.steps->m_StepsType = GAMEMAN->StringToStepsType(static_cast<const char *>(query.getColumn(index++)));
+	info.steps->m_StepsTypeStr = static_cast<const char *>(query.getColumn(index++));
+	info.steps->SetChartStyle(static_cast<const char *>(query.getColumn(index++)));
+	RString name = static_cast<const char *>(query.getColumn(index++));
+	Trim(name);
+	info.steps->SetChartName(name);
+	info.steps->SetDifficulty(StringToDifficulty(static_cast<const char *>(query.getColumn(index++)));
+	info.steps->SetMeter(StringToInt(static_cast<const char *>(query.getColumn(index++)));
+	vector<RString> values;
+	split((*info.params)[1], ",", values, true);
+	RadarValues rv;
+	rv.Zero();
+	for (size_t i = 0; i < NUM_RadarCategory; ++i)
+		rv[i] = StringToInt(values[i]);
+	//info.steps->SetCachedRadarValues(rv);
 	//info.steps->SetCredit((*info.params)[1]);
 	//info.steps->SetMusicFile((*info.params)[1]);
-		loader.ProcessBPMs(*info.timing, (*info.params)[1]);
-		loader.ProcessStops(*info.timing, (*info.params)[1]);
-		loader.ProcessDelays(*info.timing, (*info.params)[1]);
-		loader.ProcessTimeSignatures(*info.timing, (*info.params)[1]);
-		loader.ProcessTickcounts(*info.timing, (*info.params)[1]);
-		loader.ProcessCombos(*info.timing, (*info.params)[1]);
-		loader.ProcessWarps(*info.timing, (*info.params)[1], song->m_fVersion);
-		loader.ProcessSpeeds(*info.timing, (*info.params)[1]);
-		loader.ProcessScrolls(*info.timing, (*info.params)[1]);
-		loader.ProcessFakes(*info.timing, (*info.params)[1]);
-		loader.ProcessLabels(*info.timing, (*info.params)[1]);
-		info.timing->m_fBeat0OffsetInSeconds = StringToFloat((*info.params)[1]);
+	loader.ProcessBPMs(*info.timing, (*info.params)[1]);
+	loader.ProcessStops(*info.timing, (*info.params)[1]);
+	loader.ProcessDelays(*info.timing, (*info.params)[1]);
+	loader.ProcessTimeSignatures(*info.timing, (*info.params)[1]);
+	loader.ProcessTickcounts(*info.timing, (*info.params)[1]);
+	loader.ProcessCombos(*info.timing, (*info.params)[1]);
+	loader.ProcessWarps(*info.timing, (*info.params)[1], song->m_fVersion);
+	loader.ProcessSpeeds(*info.timing, (*info.params)[1]);
+	loader.ProcessScrolls(*info.timing, (*info.params)[1]);
+	loader.ProcessFakes(*info.timing, (*info.params)[1]);
+	loader.ProcessLabels(*info.timing, (*info.params)[1]);
+	info.timing->m_fBeat0OffsetInSeconds = StringToFloat((*info.params)[1]);
 	void SetStepsDisplayBPM(SSC::StepsTagInfo& info)
 	{
 		// #DISPLAYBPM:[xxx][xxx:xxx]|[*];
@@ -885,7 +1109,7 @@ bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
 		}
 	}
 
-		//info.steps->SetChartKey((*info.params)[1]);
+	//info.steps->SetChartKey((*info.params)[1]);
 
 	vector<float> msdsplit(const RString& s) {
 		vector<float> o;
@@ -924,7 +1148,7 @@ bool SongCacheIndex::LoadSongFromCache(Song* song, string dir)
 		song->TidyUpData(false, false);
 	}
 }
-
+	*/
 /*
  * (c) 2002-2003 Glenn Maynard
  * All rights reserved.
