@@ -20,7 +20,7 @@ class SongCacheIndex
 	void CreateDBTables();
 	bool DBEmpty{true};
 	SQLite::Database *db;
-
+	SQLite::Transaction *curTransaction;
 public:
 	SongCacheIndex();
 	~SongCacheIndex();
@@ -37,6 +37,8 @@ public:
 	int InsertSteps(const Steps* pSteps, int songID);
 	bool LoadSongFromCache(Song* song, string dir);
 	bool CacheSong(Song& song, string dir);
+	void StartTransaction();
+	void FinishTransaction();
 };
 
 extern SongCacheIndex *SONGINDEX;	// global and accessible from anywhere in our program
