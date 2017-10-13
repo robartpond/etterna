@@ -190,7 +190,7 @@ void SetOffset(SSC::SongTagInfo& info)
 }
 void SetSongStops(SSC::SongTagInfo& info)
 {
-	info.loader->ProcessStops(info.song->m_SongTiming, (*info.params)[1]);
+	info.loader->ProcessStops(info.song->m_SongTiming, (*info.params)[1], info.loader->GetSongTitle());
 }
 void SetSongDelays(SSC::SongTagInfo& info)
 {
@@ -198,15 +198,15 @@ void SetSongDelays(SSC::SongTagInfo& info)
 }
 void SetSongBPMs(SSC::SongTagInfo& info)
 {
-	info.loader->ProcessBPMs(info.song->m_SongTiming, (*info.params)[1]);
+	info.loader->ProcessBPMs(info.song->m_SongTiming, (*info.params)[1], info.loader->GetSongTitle());
 }
 void SetSongWarps(SSC::SongTagInfo& info)
 {
-	info.loader->ProcessWarps( info.song->m_SongTiming, (*info.params)[1], info.song->m_fVersion );
+	info.loader->ProcessWarps( info.song->m_SongTiming, (*info.params)[1], info.song->m_fVersion, info.loader->GetSongTitle() );
 }
 void SetSongLabels(SSC::SongTagInfo& info)
 {
-	info.loader->ProcessLabels( info.song->m_SongTiming, (*info.params)[1] );
+	info.loader->ProcessLabels( info.song->m_SongTiming, (*info.params)[1], info.loader->GetSongTitle());
 }
 void SetSongTimeSignatures(SSC::SongTagInfo& info)
 {
@@ -226,7 +226,7 @@ void SetSongSpeeds(SSC::SongTagInfo& info)
 }
 void SetSongScrolls(SSC::SongTagInfo& info)
 {
-	info.loader->ProcessScrolls(info.song->m_SongTiming, (*info.params)[1]);
+	info.loader->ProcessScrolls(info.song->m_SongTiming, (*info.params)[1], info.loader->GetSongTitle());
 }
 void SetSongFakes(SSC::SongTagInfo& info)
 {
@@ -336,7 +336,7 @@ void SetStepsBPMs(SSC::StepsTagInfo& info)
 {
 	if(info.song->m_fVersion >= VERSION_SPLIT_TIMING || info.for_load_edit)
 	{
-		info.loader->ProcessBPMs(*info.timing, (*info.params)[1]);
+		info.loader->ProcessBPMs(*info.timing, (*info.params)[1], info.loader->GetSongTitle());
 		info.has_own_timing = true;
 	}
 	info.ssc_format= true;
@@ -345,7 +345,7 @@ void SetStepsStops(SSC::StepsTagInfo& info)
 {
 	if(info.song->m_fVersion >= VERSION_SPLIT_TIMING || info.for_load_edit)
 	{
-		info.loader->ProcessStops(*info.timing, (*info.params)[1]);
+		info.loader->ProcessStops(*info.timing, (*info.params)[1], info.loader->GetSongTitle());
 		info.has_own_timing = true;
 	}
 	info.ssc_format= true;
@@ -390,7 +390,7 @@ void SetStepsWarps(SSC::StepsTagInfo& info)
 {
 	if(info.song->m_fVersion >= VERSION_SPLIT_TIMING || info.for_load_edit)
 	{
-		info.loader->ProcessWarps(*info.timing, (*info.params)[1], info.song->m_fVersion);
+		info.loader->ProcessWarps(*info.timing, (*info.params)[1], info.song->m_fVersion, info.loader->GetSongTitle());
 		info.has_own_timing = true;
 	}
 	info.ssc_format= true;
@@ -408,7 +408,7 @@ void SetStepsScrolls(SSC::StepsTagInfo& info)
 {
 	if(info.song->m_fVersion >= VERSION_SPLIT_TIMING || info.for_load_edit)
 	{
-		info.loader->ProcessScrolls(*info.timing, (*info.params)[1]);
+		info.loader->ProcessScrolls(*info.timing, (*info.params)[1], info.loader->GetSongTitle());
 		info.has_own_timing = true;
 	}
 	info.ssc_format= true;
@@ -426,7 +426,7 @@ void SetStepsLabels(SSC::StepsTagInfo& info)
 {
 	if(info.song->m_fVersion >= VERSION_SPLIT_TIMING || info.for_load_edit)
 	{
-		info.loader->ProcessLabels(*info.timing, (*info.params)[1]);
+		info.loader->ProcessLabels(*info.timing, (*info.params)[1], info.loader->GetSongTitle());
 		info.has_own_timing = true;
 	}
 	info.ssc_format= true;
@@ -601,7 +601,7 @@ ssc_parser_helper_t parser_helper;
 // End parser_helper related functions. -Kyz
 /****************************************************************/
 
-void SSCLoader::ProcessBPMs( TimingData &out, const RString &sParam )
+void SSCLoader::ProcessBPMs( TimingData &out, const RString &sParam, string songName)
 {
 	vector<RString> arrayBPMExpressions;
 	split( sParam, ",", arrayBPMExpressions );
@@ -613,9 +613,9 @@ void SSCLoader::ProcessBPMs( TimingData &out, const RString &sParam )
 		if( arrayBPMValues.size() != 2 )
 		{
 			LOG->UserLog("Song file",
-				     this->GetSongTitle(),
-				     "has an invalid #BPMS value \"%s\" (must have exactly one '='), ignored.",
-				     arrayBPMExpressions[b].c_str() );
+				songName,
+				"has an invalid #BPMS value \"%s\" (must have exactly one '='), ignored.",
+				arrayBPMExpressions[b].c_str() );
 			continue;
 		}
 		
@@ -628,14 +628,14 @@ void SSCLoader::ProcessBPMs( TimingData &out, const RString &sParam )
 		else
 		{
 			LOG->UserLog("Song file",
-				     this->GetSongTitle(),
-				     "has an invalid BPM at beat %f, BPM %f.",
-				     fBeat, fNewBPM );
+				songName,
+				"has an invalid BPM at beat %f, BPM %f.",
+				fBeat, fNewBPM );
 		}
 	}
 }
 
-void SSCLoader::ProcessStops( TimingData &out, const RString &sParam )
+void SSCLoader::ProcessStops( TimingData &out, const RString &sParam, string songName)
 {
 	vector<RString> arrayStopExpressions;
 	split( sParam, ",", arrayStopExpressions );
@@ -647,9 +647,9 @@ void SSCLoader::ProcessStops( TimingData &out, const RString &sParam )
 		if( arrayStopValues.size() != 2 )
 		{
 			LOG->UserLog("Song file",
-				     this->GetSongTitle(),
-				     "has an invalid #STOPS value \"%s\" (must have exactly one '='), ignored.",
-				     arrayStopExpressions[b].c_str() );
+				songName,
+				"has an invalid #STOPS value \"%s\" (must have exactly one '='), ignored.",
+				arrayStopExpressions[b].c_str() );
 			continue;
 		}
 		
@@ -660,14 +660,14 @@ void SSCLoader::ProcessStops( TimingData &out, const RString &sParam )
 		else
 		{
 			LOG->UserLog("Song file",
-				     this->GetSongTitle(),
-				     "has an invalid Stop at beat %f, length %f.",
-				     fBeat, fNewStop );
+				songName,
+				"has an invalid Stop at beat %f, length %f.",
+				fBeat, fNewStop );
 		}
 	}
 }
 
-void SSCLoader::ProcessWarps( TimingData &out, const RString &sParam, const float fVersion )
+void SSCLoader::ProcessWarps( TimingData &out, const RString &sParam, const float fVersion, string songName)
 {
 	vector<RString> arrayWarpExpressions;
 	split( sParam, ",", arrayWarpExpressions );
@@ -679,9 +679,9 @@ void SSCLoader::ProcessWarps( TimingData &out, const RString &sParam, const floa
 		if( arrayWarpValues.size() != 2 )
 		{
 			LOG->UserLog("Song file",
-				     this->GetSongTitle(),
-				     "has an invalid #WARPS value \"%s\" (must have exactly one '='), ignored.",
-				     arrayWarpExpressions[b].c_str() );
+				songName,
+				"has an invalid #WARPS value \"%s\" (must have exactly one '='), ignored.",
+				arrayWarpExpressions[b].c_str() );
 			continue;
 		}
 		
@@ -697,14 +697,14 @@ void SSCLoader::ProcessWarps( TimingData &out, const RString &sParam, const floa
 		else
 		{
 			LOG->UserLog("Song file",
-				     this->GetSongTitle(),
-				     "has an invalid Warp at beat %f, BPM %f.",
-				     fBeat, fNewBeat );
+				songName,
+				"has an invalid Warp at beat %f, BPM %f.",
+				fBeat, fNewBeat );
 		}
 	}
 }
 
-void SSCLoader::ProcessLabels( TimingData &out, const RString &sParam )
+void SSCLoader::ProcessLabels( TimingData &out, const RString &sParam , string songName)
 {
 	vector<RString> arrayLabelExpressions;
 	split( sParam, ",", arrayLabelExpressions );
@@ -716,9 +716,9 @@ void SSCLoader::ProcessLabels( TimingData &out, const RString &sParam )
 		if( arrayLabelValues.size() != 2 )
 		{
 			LOG->UserLog("Song file",
-				     this->GetSongTitle(),
-				     "has an invalid #LABELS value \"%s\" (must have exactly one '='), ignored.",
-				     arrayLabelExpressions[b].c_str() );
+				 songName,
+				 "has an invalid #LABELS value \"%s\" (must have exactly one '='), ignored.",
+				 arrayLabelExpressions[b].c_str() );
 			continue;
 		}
 		
@@ -730,15 +730,18 @@ void SSCLoader::ProcessLabels( TimingData &out, const RString &sParam )
 		else 
 		{
 			LOG->UserLog("Song file",
-				     this->GetSongTitle(),
-				     "has an invalid Label at beat %f called %s.",
-				     fBeat, sLabel.c_str() );
+				 songName,
+				 "has an invalid Label at beat %f called %s.",
+				 fBeat, sLabel.c_str() );
 		}
 		
 	}
 }
-
-void SSCLoader::ProcessCombos( TimingData &out, const RString &line, const int rowsPerBeat )
+void SSCLoader::ProcessCombos(TimingData &out, const RString &line, const int rowsPerBeat)
+{
+	ProcessCombos(out, line, this->GetSongTitle(), rowsPerBeat);
+}
+void SSCLoader::ProcessCombos( TimingData &out, const RString &line, string songName, const int rowsPerBeat)
 {
 	vector<RString> arrayComboExpressions;
 	split( line, ",", arrayComboExpressions );
@@ -751,9 +754,9 @@ void SSCLoader::ProcessCombos( TimingData &out, const RString &line, const int r
 		if( size < 2 )
 		{
 			LOG->UserLog("Song file",
-				     this->GetSongTitle(),
-				     "has an invalid #COMBOS value \"%s\" (must have at least one '='), ignored.",
-				     arrayComboExpressions[f].c_str() );
+				songName,
+				"has an invalid #COMBOS value \"%s\" (must have at least one '='), ignored.",
+				arrayComboExpressions[f].c_str() );
 			continue;
 		}
 		const float fComboBeat = StringToFloat( arrayComboValues[0] );
@@ -763,7 +766,7 @@ void SSCLoader::ProcessCombos( TimingData &out, const RString &line, const int r
 	}
 }
 
-void SSCLoader::ProcessScrolls( TimingData &out, const RString sParam )
+void SSCLoader::ProcessScrolls( TimingData &out, const RString sParam, string songName)
 {
 	vector<RString> vs1;
 	split( sParam, ",", vs1 );
@@ -776,9 +779,9 @@ void SSCLoader::ProcessScrolls( TimingData &out, const RString sParam )
 		if( vs2.size() < 2 )
 		{
 			LOG->UserLog("Song file",
-				     this->GetSongTitle(),
-				     "has an scroll change with %i values.",
-				     static_cast<int>(vs2.size()) );
+				songName,
+				"has an scroll change with %i values.",
+				static_cast<int>(vs2.size()) );
 			continue;
 		}
 
@@ -788,9 +791,9 @@ void SSCLoader::ProcessScrolls( TimingData &out, const RString sParam )
 		if( fBeat < 0 )
 		{
 			LOG->UserLog("Song file",
-				     this->GetSongTitle(),
-				     "has an scroll change with beat %f.",
-				     fBeat );
+				songName,
+				"has an scroll change with beat %f.",
+				 fBeat );
 			continue;
 		}
 
