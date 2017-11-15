@@ -84,11 +84,12 @@ void DoInstalls(CommandLineActions::CommandLineArgs args)
 					auto& etaner = td->BuildAndGetEtaner(nerv);
 					auto& serializednd = nd.SerializeNoteData(etaner);
 					Json::Value chart;
-					for (float percent = 70.0; percent <= 97.0; percent += 1.0) {
-						auto dakine = MinaSDCalc(serializednd, steps->GetNoteData().GetNumTracks(), percent, 1.f, td->HasWarps());
-						for(int i=0; i< dakine.size(); i++)
+					for (float rate = 0.7; rate <= 1.0; rate += 0.1) {
+						for (float percent = 70.0; percent <= 97.0; percent += 1.0) {
+							auto dakine = MinaSDCalc(serializednd, steps->GetNoteData().GetNumTracks(), rate, percent, 1.f, td->HasWarps());
 							FOREACH_ENUM(Skillset, ss)
-								chart[to_string(ss)][to_string(0.7+(0.1*i)).substr(0, 3)][to_string(percent).substr(0, 5)] = static_cast<int>(dakine[i][ss]*100);
+								chart[to_string(rate).substr(0, 3)][to_string(percent).substr(0, 5)] = static_cast<int>(dakine[ss]*100);
+						}
 					}
 
 					charts[steps->GetChartKey()] = chart;
