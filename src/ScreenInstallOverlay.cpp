@@ -18,7 +18,12 @@ class Song;
 #include "ScreenDimensions.h"
 #include "StepMania.h"
 #include "ActorUtil.h"
-
+#include "Song.h"
+#include "NoteData.h"
+#include "Steps.h"
+#include "MinaCalc.h"
+#include "JsonUtil.h"
+#include "json/writer.h"
 #if !defined(WITHOUT_NETWORKING)
 #include "DownloadManager.h"
 #endif
@@ -63,6 +68,47 @@ void DoInstalls(CommandLineActions::CommandLineArgs args)
 	for (int i = 0; i<(int)args.argv.size(); i++)
 	{
 		RString s = args.argv[i];
+		if (s == "recalc") {
+			Json::Value root;
+			Json::Value charts;
+			FOREACH_CONST(Song*, SONGMAN->GetAllSongs(), iSong) {
+				Song *pSong = (*iSong);
+				FOREACH_CONST(Steps*, pSong->GetAllSteps(), iSteps) {
+					Steps* steps = (*iSteps);
+					TimingData* td = steps->GetTimingData();
+					NoteData nd;
+					steps->GetNoteData(nd);
+
+					nd.LogNonEmptyRows();
+					auto& nerv = nd.GetNonEmptyRowVector();
+					auto& etaner = td->BuildAndGetEtaner(nerv);
+					auto& serializednd = nd.SerializeNoteData(etaner);
+					Json::Value chart;
+					for (float rate = 0.7; rate <= 1.0; rate += 0.1) {
+						for (float percent = 70.0; percent <= 97.0; percent += 1.0) {
+							auto dakine = MinaSDCalc(serializednd, steps->GetNoteData().GetNumTracks(), rate, percent, 1.f, td->HasWarps());
+							FOREACH_ENUM(Skillset, ss)
+								chart[to_string(rate).substr(0, 3)][to_string(percent).substr(0, 5)] = dakine[ss];
+						}
+					}
+
+					charts[steps->GetChartKey()] = chart;
+					td->UnsetEtaner();
+					nd.UnsetNerv();
+					nd.UnsetSerializedNoteData();
+					steps->Compress();
+				}
+			}
+			root["charts"] = charts;
+			RageFile f;
+			std::string output;
+			Json::FastWriter writer;
+			string out = writer.write(root);
+			f.Open("ssrcache.json", 0x2);//WRITE
+			f.Write(out);
+			f.Close();
+			sm_crash();
+		}
 		if (IsHTTPProtocol(s))
 		{
 
