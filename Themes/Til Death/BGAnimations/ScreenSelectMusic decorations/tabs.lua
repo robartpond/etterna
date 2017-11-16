@@ -3,7 +3,7 @@ local numericinputactive = false
 local packinputactive = false
 local whee
 
-local tabNames = {"General","MSD","Score","Search","Profile","Filters", "Goals", "Playlists", "Packs"} -- this probably should be in tabmanager.
+local tabNames = {"General","MSD","Score","Search","Profile","Filters", "Goals", "Playlists", "Packs", "Options"} -- this probably should be in tabmanager.
 
 local function input(event)
 	if event.type ~= "InputEventType_Release" and active then
