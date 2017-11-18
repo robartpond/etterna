@@ -453,6 +453,15 @@ static int GetTimingDifficulty()
 	return iTimingDifficulty;
 }
 LuaFunction( GetTimingDifficulty, GetTimingDifficulty() );
+static int SetTimingDifficulty(float judge)
+{
+	int iTimingDifficulty = judge;
+	auto opt = ConfOption::Find("TimingWindowScale");
+	IPreference *pPref = IPreference::GetPreferenceByName(opt->m_sPrefName);
+	pPref->FromString(ToString(judge));
+	return 1;
+}
+LuaFunction(SetTimingDifficulty, SetTimingDifficulty(FArg(1)))
 static int GetLifeDifficulty()
 {
 	int iLifeDifficulty = 0;
