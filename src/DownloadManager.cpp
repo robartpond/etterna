@@ -1,4 +1,4 @@
-#pragma once
+pragma once
 
 #include "global.h"
 #if !defined(WITHOUT_NETWORKING)
@@ -249,15 +249,11 @@ bool DownloadManager::UpdateAndIsFinished(float fDeltaSeconds)
 	FD_ZERO(&fdread);
 	FD_ZERO(&fdwrite);
 	FD_ZERO(&fdexcep);
-	timeout.tv_sec = 1;
+	timeout.tv_sec = 0;
 	timeout.tv_usec = 0;
 	curl_multi_timeout(mHandle, &curl_timeo);
 	if (curl_timeo >= 0) {
-		timeout.tv_sec = curl_timeo / 1000;
-		if (timeout.tv_sec > 1)
-			timeout.tv_sec = 1;
-		else
-			timeout.tv_usec = (curl_timeo % 1000) * 1000;
+		return true;
 	}
 
 	mc = curl_multi_fdset(mHandle, &fdread, &fdwrite, &fdexcep, &maxfd);
@@ -266,14 +262,7 @@ bool DownloadManager::UpdateAndIsFinished(float fDeltaSeconds)
 		return false;
 	}
 	if (maxfd == -1) {
-#ifdef _WIN32
-		Sleep(1);
 		rc = 0;
-#else
-		/* Portable sleep for platforms other than Windows. */
-		timeval wait = { 0, 1 };
-		rc = select(0, nullptr, nullptr, nullptr, &wait);
-#endif
 	}
 	else {
 		rc = select(maxfd + 1, &fdread, &fdwrite, &fdexcep, &timeout);
