@@ -101,6 +101,8 @@ public:
 	void AddScore(const HighScore& hs_) { HighScore hs = hs_; pscores[hs.GetChartKey()].AddScore(hs); }
 	void ImportScore(const HighScore& hs_);
 
+	vector<vector<HighScore*>> ScoreManager::GetAllPBPtrs();
+
 	// don't save scores under this percentage
 	float minpercent = PREFSMAN->m_fMinPercentToSaveScores;
 

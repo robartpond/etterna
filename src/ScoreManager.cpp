@@ -249,6 +249,15 @@ void ScoreManager::SetAllTopScores() {
 		i->second.SetTopScores();
 	}
 }
+vector<vector<HighScore*>> ScoreManager::GetAllPBPtrs() {
+	vector<vector<HighScore*>> vec;
+	FOREACHUM(string, ScoresForChart, pscores, i) {
+		if (!SONGMAN->IsChartLoaded(i->first))
+			continue;
+		vec.emplace_back(i->second.GetAllPBPtrs());
+	}
+	return vec;
+}
 
 static const float ld_update = 0.02f;
 void ScoreManager::RecalculateSSRs(LoadingWindow *ld) {

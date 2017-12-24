@@ -53,6 +53,7 @@ struct HighScore
 	vector<int> GetNoteRowVector() const;
 	vector<float> timeStamps;
 	string GetScoreKey() const;
+	bool GetUploaded() const;
 	int GetTopScore() const;
 	/**
 	 * @brief Determine how many seconds the player had left in Survival mode.
@@ -89,6 +90,7 @@ struct HighScore
 	void SetScore( unsigned int iScore );
 	void SetPercentDP( float f );
 	void SetWifeScore(float f);
+	bool SetUploaded(bool uploaded);
 	void SetWifePoints(float f);
 	void SetSSRNormPercent(float f);
 	void SetMusicRate(float f);

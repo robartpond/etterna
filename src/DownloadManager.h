@@ -115,9 +115,10 @@ public:
 	bool EncodeSpaces(string& str);
 
 	bool LoginAndUploadProfile(string file, string profileName, string user, string pass);
+	bool LoginAndUploadScores(string file, string user, string pass);
 	bool UploadProfile(string file, string profileName);
 
-	bool UploadScore(HighScore* hs);
+	bool UploadScore(HighScore* hs, bool uploadReplayData);
 
 	DateTime GetLastUploadDate(string profileName);
 	bool ShouldUploadScores();

@@ -27,7 +27,18 @@ local t = Def.ActorFrame{
 		self:queuecommand("Set")
 	end,
 }
-
+if GAMESTATE:IsPlayerEnabled(PLAYER_1) then 
+	local user = playerConfig:get_data(pn_to_profile_slot(PLAYER_1)).UserName
+	local pass = playerConfig:get_data(pn_to_profile_slot(PLAYER_1)).Password
+	if pass ~= "" and answer ~= "" and not DLMAN:IsLoggedIn() then
+		if DLMAN:Login(user, pass) then
+			ms.ok("Succesfully logged in")
+		else
+			ms.ok("Login failed!")
+		end
+	end
+end
+				
 local frameX = 10
 local frameY = 45
 local frameWidth = capWideScale(360,400)
@@ -510,6 +521,8 @@ local profilebuttons = Def.ActorFrame{
 							pass=answer
 							if DLMAN:Login(user, pass) then
 								ms.ok("Succesfully logged in")
+								playerConfig:get_data(pn_to_profile_slot(PLAYER_1)).UserName = user
+								playerConfig:get_data(pn_to_profile_slot(PLAYER_1)).Password = pass
 							else
 								ms.ok("Login failed!")
 							end

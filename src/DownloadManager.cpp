@@ -9,6 +9,7 @@
 #include "RageFile.h"
 #include "DownloadManager.h"
 #include "RageFileManager.h"
+#include "ScoreManager.h"
 #include "ProfileManager.h"
 #include "SongManager.h"
 #include "ScreenInstallOverlay.h"
@@ -442,6 +443,21 @@ bool DownloadManager::LoginAndUploadProfile(string file, string profileName, str
 	return UploadProfile(file, profileName);
 }
 
+bool DownloadManager::LoginAndUploadScores(string file, string user, string pass)
+{
+	if (user != sessionUser || pass != sessionPass)
+		if (!StartSession(user, pass))
+			return false;
+	auto scores = SCOREMAN->GetAllPBPtrs();
+	for (auto&vec : scores) {
+		for (auto&scorePtr : vec) {
+			if(!scorePtr->GetUploaded())
+				UploadScore(scorePtr, false);
+			scorePtr->SetUploaded(true);
+		}
+	}
+	return true;
+}
 bool DownloadManager::UploadProfile(string file, string profileName)
 {
 	if (!LoggedIn())
@@ -474,7 +490,7 @@ bool DownloadManager::ShouldUploadScores()
 {
 	return LoggedIn() && automaticSync;
 }
-bool DownloadManager::UploadScore(HighScore* hs) 
+bool DownloadManager::UploadScore(HighScore* hs, bool uploadReplayData) 
 {
 	if (!LoggedIn())
 		return false;
@@ -507,12 +523,14 @@ bool DownloadManager::UploadScore(HighScore* hs)
 	SetCURLFormPostField(curlHandle, form, lastPtr, "calc_version", hs->GetSSRCalcVersion());
 	SetCURLFormPostField(curlHandle, form, lastPtr, "topscore", hs->GetTopScore());
 	string replayString = "[";
-	vector<float> timestamps = hs->timeStamps;
-	vector<float> offsets = hs->GetOffsetVector();
-	for (int i = 0; i < offsets.size(); i++) {
-		replayString += "[" + to_string(timestamps[i]) + "," + to_string(1000.f * offsets[i]) + "],";
+	if (uploadReplayData) {
+		vector<float> timestamps = hs->timeStamps;
+		vector<float> offsets = hs->GetOffsetVector();
+		for (int i = 0; i < offsets.size(); i++) {
+			replayString += "[" + to_string(timestamps[i]) + "," + to_string(1000.f * offsets[i]) + "],";
+		}
+		replayString = replayString.substr(0, replayString.size() - 1); //remove ","
 	}
-	replayString = replayString.substr(0, replayString.size() - 1); //remove ","
 	replayString += "]";
 	SetCURLFormPostField(curlHandle, form, lastPtr, "replay_data", replayString);
 	SetCURLPostToURL(curlHandle, url);

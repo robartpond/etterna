@@ -57,6 +57,7 @@ struct HighScoreImpl
 	RadarValues radarValues;
 	float fLifeRemainingSeconds;
 	bool bDisqualified;
+	bool uploaded{ false };
 	string ValidationKey;
 	int TopScore;
 
@@ -288,6 +289,7 @@ XNode *HighScoreImpl::CreateNode() const
 	pNode->AppendChild( "PlayerGuid",		sPlayerGuid );
 	pNode->AppendChild( "MachineGuid",		sMachineGuid );
 	pNode->AppendChild( "ProductID",		iProductID );
+	pNode->AppendChild("Uploaded", uploaded);
 
 	XNode* pTapNoteScores = pNode->AppendChild( "TapNoteScores" );
 	FOREACH_ENUM( TapNoteScore, tns )
@@ -375,6 +377,7 @@ void HighScoreImpl::LoadFromEttNode(const XNode *pNode) {
 	pNode->GetChildValue("JudgeScale", fJudgeScale);
 	pNode->GetChildValue("NoChordCohesion", bNoChordCohesion);
 	pNode->GetChildValue("EtternaValid", bEtternaValid);
+	pNode->GetChildValue("Uploaded", uploaded);
 	pNode->GetChildValue("SurviveSeconds", fSurviveSeconds);
 	pNode->GetChildValue("MaxCombo", iMaxCombo);
 	pNode->GetChildValue("Modifiers", s); sModifiers = s;
@@ -717,6 +720,7 @@ bool HighScore::GetEtternaValid() const { return m_Impl->bEtternaValid; }
 vector<float> HighScore::GetOffsetVector() const { return m_Impl->vOffsetVector; }
 vector<int> HighScore::GetNoteRowVector() const { return m_Impl->vNoteRowVector; }
 string HighScore::GetScoreKey() const { return m_Impl->ScoreKey; }
+bool HighScore::GetUploaded() const { return m_Impl->uploaded; }
 float HighScore::GetSurviveSeconds() const { return m_Impl->fSurviveSeconds; }
 float HighScore::GetSurvivalSeconds() const { return GetSurviveSeconds() + GetLifeRemainingSeconds(); }
 string HighScore::GetModifiers() const { return m_Impl->sModifiers; }
@@ -742,6 +746,7 @@ void HighScore::SetStageAward( StageAward a ) { m_Impl->stageAward = a; }
 void HighScore::SetPeakComboAward( PeakComboAward a ) { m_Impl->peakComboAward = a; }
 void HighScore::SetPercentDP( float f ) { m_Impl->fPercentDP = f; }
 void HighScore::SetWifeScore(float f) {m_Impl->fWifeScore = f;}
+bool HighScore::SetUploaded(bool uploaded) { return m_Impl->uploaded = uploaded; }
 void HighScore::SetWifePoints(float f) { m_Impl->fWifePoints= f; }
 void HighScore::SetSSRNormPercent(float f) { m_Impl->fSSRNormPercent = f; }
 void HighScore::SetMusicRate(float f) { m_Impl->fMusicRate = f; }

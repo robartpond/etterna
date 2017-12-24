@@ -23,6 +23,8 @@ local defaultConfig = {
 	BackgroundType = 1,
 	ProgressBarPos = 1, --moved from theme options into here, 1 = top; 0 = bottom
 	CustomizeGameplay = false,
+	UserName = "",
+	Password = "",
 	CustomEvaluationWindowTimings = false,
 	GameplayXYCoordinates = {
 		JudgeX = 0,
